@@ -3,14 +3,16 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="com.example.finalprojectmobilecomputing">
 
+    <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.RECEIVE_SMS"/>
-    <uses-permission android:name="android.permission.READ_SMS"/>
-    <uses-permission android:name="android.permission.SEND_SMS"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
 
-    <uses-feature android:name="android.hardware.location.gps" android:required="true"/>
+    <!-- Device features -->
+    <uses-feature android:name="android.hardware.location.gps" android:required="true" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
 
     <application
@@ -24,39 +26,33 @@
         android:theme="@style/Theme.FinalProjectMobileComputing"
         tools:targetApi="31">
 
+        <!-- Google Maps API key -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyBDYUTAGyr5FzAXTd8UqBAIeWaZW4wTV5I"/>
+            android:value="AIzaSyBDYUTAGyr5FzAXTd8UqBAIeWaZW4wTV5I" />
 
-        <activity
-            android:name=".OTPVerification"
-            android:exported="false" />
-        <activity
-            android:name=".LandingPage"
-            android:exported="false" />
-        <activity
-            android:name=".SplashActivity"
-            android:exported="true">
+        <!-- App activities -->
+        <activity android:name=".SplashActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity
-            android:name=".MainPage"
-            android:exported="false" />
-        <activity
-            android:name=".SignUpActivity"
-            android:exported="false" />
-        <activity
-            android:name=".MainActivity"
-            android:exported="false"/>
 
-        <activity android:name=".Profile"
-            android:exported="false"/>
-
+        <activity android:name=".MainActivity" android:exported="false" />
+        <activity android:name=".MainPage" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="myapp" android:host="main" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".SignUpActivity" android:exported="false" />
+        <activity android:name=".Profile" android:exported="false" />
+        <activity android:name=".PaymentActivity" android:exported="false" />
+        <activity android:name=".LandingPage" android:exported="false" />
+        <activity android:name=".OTPVerification" android:exported="false" />
     </application>
-
 
 </manifest>
