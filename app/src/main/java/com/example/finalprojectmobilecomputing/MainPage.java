@@ -40,6 +40,11 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             drawerLayout.openDrawer(Gravity.LEFT);
         });
 
+        Button payButton = findViewById(R.id.payButton);
+        payButton.setOnClickListener(v -> {
+            startActivity(new Intent(MainPage.this, PaymentActivity.class));
+        });
+
         // Set the welcome message
         TextView helloTextView = findViewById(R.id.helloTextView);
         helloTextView.setText("Hello, You have successfully Logged In!");
