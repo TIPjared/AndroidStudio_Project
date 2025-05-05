@@ -42,7 +42,8 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
         Button payButton = findViewById(R.id.payButton);
         payButton.setOnClickListener(v -> {
-            startActivity(new Intent(MainPage.this, PaymentActivity.class));
+            Intent intent = new Intent(MainPage.this, QRScannerActivity.class);
+            startActivity(intent);
         });
 
         // Set the welcome message

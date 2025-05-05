@@ -55,6 +55,15 @@ dependencies {
     implementation("com.google.android.gms:play-services-auth:20.0.1")
     implementation ("com.google.android.gms:play-services-maps:18.0.2")
     implementation ("com.google.android.gms:play-services-location:17.0.0")
+    implementation ("com.google.guava:guava:31.1-android")
+
+    //Cameras
+    implementation ("androidx.camera:camera-core:1.3.0")
+    implementation ("androidx.camera:camera-camera2:1.3.0")
+    implementation ("androidx.camera:camera-lifecycle:1.3.0")
+    implementation ("androidx.camera:camera-view:1.3.0")
+    // ML Kit Barcode Scanning
+    implementation ("com.google.mlkit:barcode-scanning:17.1.0")
     implementation(libs.firebase.inappmessaging)
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
