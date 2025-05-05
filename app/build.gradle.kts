@@ -51,7 +51,7 @@ dependencies {
     implementation ("com.google.firebase:firebase-common:21.0.0")
     implementation ("com.google.firebase:firebase-analytics:21.1.0")
     implementation ("com.google.android.material:material:1.11.0") // or latest
-
+    implementation ("androidx.browser:browser:1.3.0")
     implementation("com.google.android.gms:play-services-auth:20.0.1")
     implementation ("com.google.android.gms:play-services-maps:18.0.2")
     implementation ("com.google.android.gms:play-services-location:17.0.0")
