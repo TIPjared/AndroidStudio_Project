@@ -89,9 +89,29 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
 
-        // Sample marker in Manila
-        LatLng manila = new LatLng(14.5995, 120.9842);
-        mMap.addMarker(new MarkerOptions().position(manila).title("Marker in Manila"));
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(manila, 12));
+        // TIP Arlegui
+        mMap.addMarker(new MarkerOptions().position(new LatLng(14.5947, 120.9876)).title("TIP Arlegui Manila"));
+
+        // Manila City Hall
+        mMap.addMarker(new MarkerOptions().position(new LatLng(14.5896, 120.9814)).title("Manila City Hall"));
+
+        // Rizal Park
+        mMap.addMarker(new MarkerOptions().position(new LatLng(14.5820, 120.9789)).title("Rizal Park (Luneta)"));
+
+        // Intramuros (Fort Santiago)
+        mMap.addMarker(new MarkerOptions().position(new LatLng(14.5942, 120.9706)).title("Fort Santiago"));
+
+        // Manila Cathedral
+        mMap.addMarker(new MarkerOptions().position(new LatLng(14.5916, 120.9739)).title("Manila Cathedral"));
+
+        // National Museum
+        mMap.addMarker(new MarkerOptions().position(new LatLng(14.5889, 120.9810)).title("National Museum"));
+
+        // Quiapo Church
+        mMap.addMarker(new MarkerOptions().position(new LatLng(14.5992, 120.9838)).title("Quiapo Church"));
+
+        // Move camera to center point
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(14.5947, 120.9845), 14));
     }
+
 }
