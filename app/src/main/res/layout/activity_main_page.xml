@@ -38,6 +38,16 @@
             android:layout_centerHorizontal="true"
             android:layout_marginTop="16dp" />
 
+        <Button
+            android:id="@+id/selectRouteButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerHorizontal="true"
+            android:layout_marginBottom="150dp"
+            android:text="Choose Location"
+            android:visibility="gone"
+            android:layout_alignParentBottom="true" />
+
         <!-- Button pinned to bottom -->
         <Button
             android:id="@+id/payButton"
