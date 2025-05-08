@@ -60,9 +60,9 @@ public class PaymentActivity extends AppCompatActivity {
 
         // Create source body for GCash payment
         Map<String, Object> attributes = new HashMap<>();
-        attributes.put("amount", 10000); // amount in centavos (₱100)
+        attributes.put("amount", 10000);
         attributes.put("redirect", Map.of(
-                "success", "https://sikad-static.onrender.com/",
+                "success", "https://sikad-static.onrender.com/?payment=success",
                 "failed", "https://sikad-static.onrender.com/payment-failed.html"
         ));
         attributes.put("type", "gcash");
