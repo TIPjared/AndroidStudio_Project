@@ -19,7 +19,6 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
@@ -43,13 +42,15 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     private DrawerLayout drawerLayout;
     private ImageButton menuButton;
     private NavigationView navigationView;
-    private Button selectRouteButton;
+    private Button selectRouteButton, payButton;
     private TextView startLocationTextView, endLocationTextView;
     private Map<String, LatLng> predefinedLocations;
     private LatLng selectedStart, selectedEnd;
     private String selectedStartName, selectedEndName;
     private Polyline currentRoute;
     private boolean selectingStart = false, selectingEnd = false;
+
+    private boolean transactionAuthorized = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,20 +61,15 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         menuButton = findViewById(R.id.menuButton);
         navigationView = findViewById(R.id.navigationView);
         selectRouteButton = findViewById(R.id.selectRouteButton);
-        selectRouteButton.setText("Choose Location");
-        selectRouteButton.setVisibility(View.GONE);
+        payButton = findViewById(R.id.payButton);
 
         startLocationTextView = findViewById(R.id.startLocationTextView);
         endLocationTextView = findViewById(R.id.endLocationTextView);
 
-        Intent intent2 = getIntent();
-        Uri data = intent2.getData();
-        if (data != null && "myapp".equals(data.getScheme()) && "main".equals(data.getHost())) {
-            String status = data.getQueryParameter("status");
-            if ("success".equals(status)) {
-                selectRouteButton.setVisibility(View.VISIBLE);
-            }
-        }
+        selectRouteButton.setText("Choose Location");
+        selectRouteButton.setVisibility(View.GONE);
+
+        setupPaymentCallback();
 
         menuButton.setOnClickListener(v -> {
             if (drawerLayout.isDrawerOpen(navigationView)) {
@@ -83,12 +79,13 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             }
         });
 
-        Button payButton = findViewById(R.id.payButton);
         payButton.setOnClickListener(v -> {
-            Intent intent = new Intent(MainPage.this, PaymentActivity.class);
-            startActivity(intent);
+            if (!transactionAuthorized) {
+                startActivity(new Intent(this, PaymentActivity.class));
+            } else {
+                cancelTransaction();
+            }
         });
-
 
         navigationView.setNavigationItemSelectedListener(menuItem -> {
             if (menuItem.getItemId() == R.id.nav_logout) {
@@ -109,6 +106,43 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         if (mapFragment != null) {
             mapFragment.getMapAsync(this);
         }
+    }
+
+    private void setupPaymentCallback() {
+        Uri data = getIntent().getData();
+        if (data != null && "myapp".equals(data.getScheme()) && "main".equals(data.getHost())) {
+            String status = data.getQueryParameter("status");
+            if ("success".equals(status)) {
+                transactionAuthorized = true;
+                updateTransactionUI();
+            }
+        } else {
+            updateTransactionUI(); // ensure UI is correct if app resumes from background
+        }
+    }
+
+    private void updateTransactionUI() {
+        if (transactionAuthorized) {
+            payButton.setText("Cancel Transaction");
+            selectRouteButton.setVisibility(View.VISIBLE);
+        } else {
+            payButton.setText("Pay Now");
+            selectRouteButton.setVisibility(View.GONE);
+            resetSelectionsAndRoute();
+        }
+    }
+
+    private void cancelTransaction() {
+        new AlertDialog.Builder(this)
+                .setTitle("Cancel Transaction")
+                .setMessage("Are you sure you want to cancel the transaction?")
+                .setPositiveButton("Yes", (dialog, which) -> {
+                    transactionAuthorized = false;
+                    updateTransactionUI();
+                    Toast.makeText(this, "Transaction cancelled", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("No", null)
+                .show();
     }
 
     @Override
@@ -275,7 +309,6 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 .geodesic(true));
 
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(route.get(0), 15));
-
         selectRouteButton.setText("Change Location");
     }
 }
