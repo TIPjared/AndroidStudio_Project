@@ -1,7 +1,10 @@
 package com.example.finalprojectmobilecomputing;
 
+import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.location.Location;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
@@ -10,10 +13,15 @@ import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -24,6 +32,9 @@ import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.material.navigation.NavigationView;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -38,39 +49,59 @@ import retrofit2.converter.gson.GsonConverterFactory;
 
 public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
+    private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
     private GoogleMap mMap;
+    private FusedLocationProviderClient fusedLocationClient;
+    private LatLng currentLocation;
+
     private DrawerLayout drawerLayout;
     private ImageButton menuButton;
     private NavigationView navigationView;
-    private Button selectRouteButton, payButton;
-    private TextView startLocationTextView, endLocationTextView;
-    private Map<String, LatLng> predefinedLocations;
-    private LatLng selectedStart, selectedEnd;
-    private String selectedStartName, selectedEndName;
-    private Polyline currentRoute;
-    private boolean selectingStart = false, selectingEnd = false;
+    private Button payButton;
+    private Button selectRouteButton;
+    private Button stopButton;
+    private Button changeDestinationButton;
+    private TextView startLocationTextView;
+    private TextView endLocationTextView;
 
+    private Map<String, LatLng> predefinedLocations = new HashMap<>();
+    private LatLng selectedEnd;
+    private String selectedEndName;
+
+    private Polyline currentRoute;
     private boolean transactionAuthorized = false;
+
+    // Firebase Database reference
+    private DatabaseReference rideLogsRef;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main_page);
 
+        // --- Initialize services & views ---
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
         drawerLayout = findViewById(R.id.drawerLayout);
         menuButton = findViewById(R.id.menuButton);
         navigationView = findViewById(R.id.navigationView);
-        selectRouteButton = findViewById(R.id.selectRouteButton);
-        payButton = findViewById(R.id.payButton);
+
+        payButton               = findViewById(R.id.payButton);
+        selectRouteButton       = findViewById(R.id.selectRouteButton);
+        stopButton              = findViewById(R.id.stopButton);
+        changeDestinationButton = findViewById(R.id.changeDestinationButton);
 
         startLocationTextView = findViewById(R.id.startLocationTextView);
-        endLocationTextView = findViewById(R.id.endLocationTextView);
+        endLocationTextView   = findViewById(R.id.endLocationTextView);
 
-        selectRouteButton.setText("Choose Location");
+        // Firebase reference for logging rides
+        rideLogsRef = FirebaseDatabase.getInstance().getReference("rideLogs");
+
+        // Initially hide route controls
         selectRouteButton.setVisibility(View.GONE);
+        stopButton.setVisibility(View.GONE);
+        changeDestinationButton.setVisibility(View.GONE);
 
-        setupPaymentCallback();
-
+        // --- Drawer toggle ---
         menuButton.setOnClickListener(v -> {
             if (drawerLayout.isDrawerOpen(navigationView)) {
                 drawerLayout.closeDrawer(navigationView);
@@ -78,17 +109,8 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 drawerLayout.openDrawer(navigationView);
             }
         });
-
-        payButton.setOnClickListener(v -> {
-            if (!transactionAuthorized) {
-                startActivity(new Intent(this, PaymentActivity.class));
-            } else {
-                cancelTransaction();
-            }
-        });
-
-        navigationView.setNavigationItemSelectedListener(menuItem -> {
-            if (menuItem.getItemId() == R.id.nav_logout) {
+        navigationView.setNavigationItemSelectedListener(item -> {
+            if (item.getItemId() == R.id.nav_logout) {
                 FirebaseAuth.getInstance().signOut();
                 startActivity(new Intent(MainPage.this, LandingPage.class));
                 finish();
@@ -97,12 +119,48 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             return true;
         });
 
+        // --- Pay / Cancel Transaction flow ---
+        payButton.setOnClickListener(v -> {
+            if (!transactionAuthorized) {
+                startActivity(new Intent(this, PaymentActivity.class));
+            } else {
+                confirmCancelTransaction();
+            }
+        });
+        setupPaymentCallback();
+
+        // --- Route / Stop / Change Destination buttons ---
         selectRouteButton.setOnClickListener(v -> {
-            resetSelectionsAndRoute();
-            showStartSelectionPopup();
+            if (selectedEnd != null && currentLocation != null) {
+                fetchAndDrawRoute(currentLocation, selectedEnd);
+                stopButton.setVisibility(View.VISIBLE);
+                changeDestinationButton.setVisibility(View.VISIBLE);
+            } else {
+                Toast.makeText(this, "Please select a destination", Toast.LENGTH_SHORT).show();
+            }
         });
 
-        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
+        stopButton.setOnClickListener(v -> {
+            if (currentLocation != null && selectedEnd != null && isNearDestination(currentLocation, selectedEnd)) {
+                Toast.makeText(this, "You have arrived at: " + selectedEndName, Toast.LENGTH_LONG).show();
+
+                // Log the ride to Firebase when the ride stops
+                logRideToFirebase();
+
+                resetRoute();
+            } else {
+                Toast.makeText(this, "You are not near your destination yet.", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        changeDestinationButton.setOnClickListener(v -> {
+            resetRoute();
+            Toast.makeText(this, "Please select a new destination marker.", Toast.LENGTH_SHORT).show();
+        });
+
+        // --- Map fragment init ---
+        SupportMapFragment mapFragment =
+                (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
         if (mapFragment != null) {
             mapFragment.getMapAsync(this);
         }
@@ -110,15 +168,16 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
     private void setupPaymentCallback() {
         Uri data = getIntent().getData();
-        if (data != null && "myapp".equals(data.getScheme()) && "main".equals(data.getHost())) {
+        if (data != null
+                && "myapp".equals(data.getScheme())
+                && "main".equals(data.getHost())
+        ) {
             String status = data.getQueryParameter("status");
             if ("success".equals(status)) {
                 transactionAuthorized = true;
-                updateTransactionUI();
             }
-        } else {
-            updateTransactionUI(); // ensure UI is correct if app resumes from background
         }
+        updateTransactionUI();
     }
 
     private void updateTransactionUI() {
@@ -128,15 +187,17 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         } else {
             payButton.setText("Pay Now");
             selectRouteButton.setVisibility(View.GONE);
-            resetSelectionsAndRoute();
+            stopButton.setVisibility(View.GONE);
+            changeDestinationButton.setVisibility(View.GONE);
+            resetRoute();
         }
     }
 
-    private void cancelTransaction() {
+    private void confirmCancelTransaction() {
         new AlertDialog.Builder(this)
                 .setTitle("Cancel Transaction")
-                .setMessage("Are you sure you want to cancel the transaction?")
-                .setPositiveButton("Yes", (dialog, which) -> {
+                .setMessage("Are you sure you want to cancel?")
+                .setPositiveButton("Yes", (d, w) -> {
                     transactionAuthorized = false;
                     updateTransactionUI();
                     Toast.makeText(this, "Transaction cancelled", Toast.LENGTH_SHORT).show();
@@ -148,167 +209,149 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
-        predefinedLocations = new HashMap<>();
+        requestLocationPermission();
 
-        addMarker("TIP Arlegui", new LatLng(14.5947, 120.9876));
-        addMarker("Manila City Hall", new LatLng(14.5896, 120.9814));
-        addMarker("Rizal Park", new LatLng(14.5820, 120.9789));
-        addMarker("Fort Santiago", new LatLng(14.5942, 120.9706));
-        addMarker("Manila Cathedral", new LatLng(14.5916, 120.9739));
-        addMarker("National Museum", new LatLng(14.5889, 120.9810));
-        addMarker("Quiapo Church", new LatLng(14.5992, 120.9838));
-
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(14.5947, 120.9845), 14));
+        // Predefine markers
+        addPredefinedMarker("TIP Arlegui",    new LatLng(14.5964, 120.9904)); // Approximate location
+        addPredefinedMarker("City Hall",      new LatLng(14.589793, 120.981617)); // :contentReference[oaicite:0]{index=0}
+        addPredefinedMarker("Rizal Park",     new LatLng(14.5825, 120.9783)); // :contentReference[oaicite:1]{index=1}
+        addPredefinedMarker("Fort Santiago",  new LatLng(14.5950, 120.9694)); // :contentReference[oaicite:2]{index=2}
+        addPredefinedMarker("Cathedral",      new LatLng(14.59147, 120.97356)); // :contentReference[oaicite:3]{index=3}
+        addPredefinedMarker("Museum",         new LatLng(14.5869, 120.9812)); // :contentReference[oaicite:4]{index=4}
+        addPredefinedMarker("Quiapo Church",  new LatLng(14.598782, 120.983783)); // :contentReference[oaicite:5]{index=5}
 
         mMap.setOnMarkerClickListener(marker -> {
-            if (selectingStart) {
-                selectedStart = marker.getPosition();
-                selectedStartName = marker.getTitle();
-                startLocationTextView.setText("Start: " + selectedStartName);
-                selectingStart = false;
-                showEndSelectionPopup();
-            } else if (selectingEnd) {
-                selectedEnd = marker.getPosition();
-                selectedEndName = marker.getTitle();
-                endLocationTextView.setText("End: " + selectedEndName);
-                selectingEnd = false;
-                getRouteFromAPI(selectedStart, selectedEnd);
-            }
+            selectedEnd = marker.getPosition();
+            selectedEndName = marker.getTitle();
+            endLocationTextView.setText("Destination: " + selectedEndName);
             return false;
         });
     }
 
-    private void resetSelectionsAndRoute() {
-        selectedStart = null;
-        selectedEnd = null;
-        selectedStartName = null;
-        selectedEndName = null;
-        selectingStart = false;
-        selectingEnd = false;
+    private void addPredefinedMarker(String title, LatLng coords) {
+        mMap.addMarker(new MarkerOptions().position(coords).title(title));
+        predefinedLocations.put(title, coords);
+    }
 
-        startLocationTextView.setText("Start: Not selected");
-        endLocationTextView.setText("End: Not selected");
-
-        if (currentRoute != null) {
-            currentRoute.remove();
-            currentRoute = null;
+    private void requestLocationPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                    this,
+                    new String[]{ Manifest.permission.ACCESS_FINE_LOCATION },
+                    LOCATION_PERMISSION_REQUEST_CODE
+            );
+        } else {
+            enableMyLocation();
         }
     }
 
-    private void showStartSelectionPopup() {
-        new AlertDialog.Builder(this)
-                .setTitle("Start Point")
-                .setMessage("Select starting destination pin on map.")
-                .setPositiveButton("OK", (dialog, which) -> selectingStart = true)
-                .setCancelable(false)
-                .show();
+    private void enableMyLocation() {
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+        ) != PackageManager.PERMISSION_GRANTED
+        ) return;
+
+        fusedLocationClient.getLastLocation()
+                .addOnSuccessListener(loc -> {
+                    if (loc != null) {
+                        currentLocation = new LatLng(loc.getLatitude(), loc.getLongitude());
+                        mMap.setMyLocationEnabled(true);
+                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
+                        startLocationTextView.setText(
+                                "You: " + currentLocation.latitude + ", " + currentLocation.longitude
+                        );
+                    } else {
+                        Toast.makeText(this, "Unable to fetch location", Toast.LENGTH_SHORT).show();
+                    }
+                });
     }
 
-    private void showEndSelectionPopup() {
-        new AlertDialog.Builder(this)
-                .setTitle("End Point")
-                .setMessage("Select end destination pin on map.")
-                .setPositiveButton("OK", (dialog, which) -> selectingEnd = true)
-                .setCancelable(false)
-                .show();
-    }
-
-    private void addMarker(String title, LatLng latLng) {
-        mMap.addMarker(new MarkerOptions().position(latLng).title(title));
-        predefinedLocations.put(title, latLng);
-    }
-
-    private void getRouteFromAPI(LatLng start, LatLng end) {
+    private void fetchAndDrawRoute(LatLng origin, LatLng dest) {
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl("https://maps.googleapis.com/")
                 .addConverterFactory(GsonConverterFactory.create())
                 .build();
 
-        DirectionsAPI directionsAPI = retrofit.create(DirectionsAPI.class);
-
-        String origin = start.latitude + "," + start.longitude;
-        String destination = end.latitude + "," + end.longitude;
+        DirectionsAPI api = retrofit.create(DirectionsAPI.class);
+        String o = origin.latitude + "," + origin.longitude;
+        String d = dest.latitude   + "," + dest.longitude;
         String key = getString(R.string.google_maps_key);
 
-        Call<DirectionsResponse> call = directionsAPI.getDirections(origin, destination, key);
-        call.enqueue(new Callback<DirectionsResponse>() {
-            @Override
-            public void onResponse(Call<DirectionsResponse> call, Response<DirectionsResponse> response) {
-                if (response.isSuccessful() && response.body() != null &&
-                        response.body().routes != null && !response.body().routes.isEmpty()) {
-                    List<LatLng> route = parseRoute(response.body());
-                    if (!route.isEmpty()) {
-                        drawRoute(route);
-                    } else {
-                        Toast.makeText(MainPage.this, "No route found", Toast.LENGTH_SHORT).show();
+        api.getDirections(o, d, key).enqueue(new Callback<DirectionsResponse>() {
+            @Override public void onResponse(
+                    Call<DirectionsResponse> call,
+                    Response<DirectionsResponse> resp
+            ) {
+                if (!resp.isSuccessful() || resp.body() == null) return;
+                DirectionsResponse result = resp.body();
+                List<LatLng> routePoints = new ArrayList<>();
+                for (DirectionsResponse.Leg leg : result.routes.get(0).legs) {
+                    for (DirectionsResponse.Step step : leg.steps) {
+                        routePoints.add(new LatLng(
+                                step.end_location.lat, step.end_location.lng));
                     }
-                } else {
-                    Toast.makeText(MainPage.this, "Failed to fetch route", Toast.LENGTH_SHORT).show();
                 }
+
+                if (currentRoute != null) currentRoute.remove();
+                currentRoute = mMap.addPolyline(
+                        new PolylineOptions().addAll(routePoints).color(Color.RED).width(5)
+                );
             }
 
-            @Override
-            public void onFailure(Call<DirectionsResponse> call, Throwable t) {
-                Toast.makeText(MainPage.this, "Network error: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+            @Override public void onFailure(Call<DirectionsResponse> call, Throwable t) {
+                Toast.makeText(MainPage.this, "Error fetching route", Toast.LENGTH_SHORT).show();
             }
         });
     }
 
-    private List<LatLng> parseRoute(DirectionsResponse response) {
-        List<LatLng> route = new ArrayList<>();
-        if (response.routes != null && !response.routes.isEmpty()) {
-            for (DirectionsResponse.Leg leg : response.routes.get(0).legs) {
-                for (DirectionsResponse.Step step : leg.steps) {
-                    route.addAll(decodePoly(step.polyline.points));
-                }
-            }
-        }
-        return route;
+    private boolean isNearDestination(LatLng current, LatLng destination) {
+        float[] results = new float[1];
+        Location.distanceBetween(
+                current.latitude, current.longitude,
+                destination.latitude, destination.longitude, results);
+        return results[0] < 100; // Distance threshold in meters
     }
 
-    private List<LatLng> decodePoly(String encoded) {
-        List<LatLng> polyline = new ArrayList<>();
-        int index = 0, len = encoded.length();
-        int lat = 0, lng = 0;
-
-        while (index < len) {
-            int b, shift = 0, result = 0;
-            do {
-                b = encoded.charAt(index++) - 63;
-                result |= (b & 0x1f) << shift;
-                shift += 5;
-            } while (b >= 0x20);
-            int dLat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
-            lat += dLat;
-
-            shift = 0;
-            result = 0;
-            do {
-                b = encoded.charAt(index++) - 63;
-                result |= (b & 0x1f) << shift;
-                shift += 5;
-            } while (b >= 0x20);
-            int dLng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
-            lng += dLng;
-
-            polyline.add(new LatLng(lat / 1E5, lng / 1E5));
-        }
-
-        return polyline;
+    private void resetRoute() {
+        if (currentRoute != null) currentRoute.remove();
+        stopButton.setVisibility(View.GONE);
+        changeDestinationButton.setVisibility(View.GONE);
     }
 
-    private void drawRoute(List<LatLng> route) {
-        if (currentRoute != null) {
-            currentRoute.remove();
-        }
+    private void logRideToFirebase() {
+        String userId = FirebaseAuth.getInstance().getCurrentUser().getUid();
+        long timestamp = System.currentTimeMillis();
 
-        currentRoute = mMap.addPolyline(new PolylineOptions()
-                .addAll(route)
-                .width(10)
-                .color(Color.BLUE)
-                .geodesic(true));
+        // Calculate the distance traveled
+        float[] results = new float[1];
+        Location.distanceBetween(
+                currentLocation.latitude, currentLocation.longitude,
+                selectedEnd.latitude, selectedEnd.longitude,
+                results
+        );
+        float distanceTraveled = results[0];  // distance in meters
 
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(route.get(0), 15));
-        selectRouteButton.setText("Change Location");
+        // Create a map to store the data
+        Map<String, Object> rideData = new HashMap<>();
+        rideData.put("distance_traveled", distanceTraveled);
+        rideData.put("location", selectedEnd.latitude + "," + selectedEnd.longitude);
+        rideData.put("timestamp", timestamp);
+
+        // Get a reference to the "location_logs" -> "logs" node in Firebase
+        DatabaseReference locationLogsRef = FirebaseDatabase.getInstance().getReference("location_logs").child("logs").push();
+
+        FirebaseFirestore firestore = FirebaseFirestore.getInstance();
+        firestore.collection("ride_logs")
+                .add(rideData)
+                .addOnSuccessListener(documentReference ->
+                        Toast.makeText(MainPage.this, "Ride also logged to Firestore!", Toast.LENGTH_SHORT).show()
+                )
+                .addOnFailureListener(e ->
+                        Toast.makeText(MainPage.this, "Error logging to Firestore", Toast.LENGTH_SHORT).show()
+                );
     }
 }
+

@@ -68,6 +68,7 @@ dependencies {
     // ML Kit Barcode Scanning
     implementation ("com.google.mlkit:barcode-scanning:17.1.0")
     implementation(libs.firebase.inappmessaging)
+    implementation(libs.firebase.database)
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
