@@ -10,12 +10,14 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.cardview.widget.CardView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
@@ -32,13 +34,19 @@ import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.material.navigation.NavigationView;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.SetOptions;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import retrofit2.Call;
@@ -110,7 +118,11 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             }
         });
         navigationView.setNavigationItemSelectedListener(item -> {
-            if (item.getItemId() == R.id.nav_logout) {
+            if (item.getItemId() == R.id.nav_history) {
+                startActivity(new Intent(MainPage.this, RideHistoryActivity.class));
+            } else if (item.getItemId() == R.id.nav_support) {
+                startActivity(new Intent(MainPage.this, SupportFeedbackActivity.class));
+            } else if (item.getItemId() == R.id.nav_logout) {
                 FirebaseAuth.getInstance().signOut();
                 startActivity(new Intent(MainPage.this, LandingPage.class));
                 finish();
@@ -118,6 +130,28 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             drawerLayout.closeDrawers();
             return true;
         });
+
+        // Find the header view from the NavigationView
+        View headerView = navigationView.getHeaderView(0);
+        
+        // Load user profile data into the navigation header
+        loadUserProfileData(headerView);
+        
+        // Setup click listener for profile link in the header
+        Button profileLink = headerView.findViewById(R.id.profileLink);
+        if (profileLink != null) {
+            profileLink.setOnClickListener(v -> {
+                goToProfile(v);
+            });
+        }
+        
+        // Setup click listener for profile container (profile image) in the header
+        CardView profileContainer = headerView.findViewById(R.id.profileContainer);
+        if (profileContainer != null) {
+            profileContainer.setOnClickListener(v -> {
+                goToProfile(v);
+            });
+        }
 
         // --- Pay / Cancel Transaction flow ---
         payButton.setOnClickListener(v -> {
@@ -165,16 +199,50 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             mapFragment.getMapAsync(this);
         }
     }
+    
+    // Method to navigate to the Profile activity
+    public void goToProfile(View view) {
+        Intent intent = new Intent(MainPage.this, Profile.class);
+        startActivity(intent);
+        if (drawerLayout.isDrawerOpen(navigationView)) {
+            drawerLayout.closeDrawer(navigationView);
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        // Call payment callback again to handle the new intent
+        setupPaymentCallback();
+    }
 
     private void setupPaymentCallback() {
+        // First check if there's a payment_status extra from PaymentResponseActivity
+        String paymentStatus = getIntent().getStringExtra("payment_status");
+        if (paymentStatus != null && "success".equals(paymentStatus)) {
+            transactionAuthorized = true;
+            updateTransactionUI();
+            return;
+        }
+        
+        // For backward compatibility, also check the URI data
         Uri data = getIntent().getData();
-        if (data != null
-                && "myapp".equals(data.getScheme())
-                && "main".equals(data.getHost())
-        ) {
-            String status = data.getQueryParameter("status");
-            if ("success".equals(status)) {
-                transactionAuthorized = true;
+        if (data != null) {
+            // Check old style myapp:// scheme
+            if ("myapp".equals(data.getScheme()) && "main".equals(data.getHost())) {
+                String status = data.getQueryParameter("status");
+                if ("success".equals(status)) {
+                    transactionAuthorized = true;
+                }
+            } 
+            // Check HTTP scheme from sikad-static.onrender.com
+            else if (data.toString().contains("sikad-static.onrender.com")) {
+                String paymentParam = data.getQueryParameter("payment");
+                if ("success".equals(paymentParam)) {
+                    transactionAuthorized = true;
+                    Toast.makeText(this, "Payment successful!", Toast.LENGTH_SHORT).show();
+                }
             }
         }
         updateTransactionUI();
@@ -280,29 +348,59 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         String d = dest.latitude   + "," + dest.longitude;
         String key = getString(R.string.google_maps_key);
 
-        api.getDirections(o, d, key).enqueue(new Callback<DirectionsResponse>() {
+        // Show a loading message
+        Toast.makeText(this, "Fetching route...", Toast.LENGTH_SHORT).show();
+
+        // Request directions with driving mode and alternatives for better results
+        api.getDirections(o, d, "driving", true, key).enqueue(new Callback<DirectionsResponse>() {
             @Override public void onResponse(
                     Call<DirectionsResponse> call,
                     Response<DirectionsResponse> resp
             ) {
-                if (!resp.isSuccessful() || resp.body() == null) return;
-                DirectionsResponse result = resp.body();
-                List<LatLng> routePoints = new ArrayList<>();
-                for (DirectionsResponse.Leg leg : result.routes.get(0).legs) {
-                    for (DirectionsResponse.Step step : leg.steps) {
-                        routePoints.add(new LatLng(
-                                step.end_location.lat, step.end_location.lng));
-                    }
+                if (!resp.isSuccessful() || resp.body() == null) {
+                    Toast.makeText(MainPage.this, "Route API request failed", Toast.LENGTH_SHORT).show();
+                    return;
                 }
+                
+                try {
+                    DirectionsResponse result = resp.body();
+                    List<LatLng> routePoints = result.getRoutePoints();
+                    
+                    if (routePoints.isEmpty()) {
+                        Toast.makeText(MainPage.this, "No route found", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
 
-                if (currentRoute != null) currentRoute.remove();
-                currentRoute = mMap.addPolyline(
-                        new PolylineOptions().addAll(routePoints).color(Color.RED).width(5)
-                );
+                    if (currentRoute != null) currentRoute.remove();
+                    
+                    // Create polyline with better visibility
+                    PolylineOptions options = new PolylineOptions()
+                        .addAll(routePoints)
+                        .color(Color.RED)
+                        .width(10)  // Wider line
+                        .geodesic(true);  // Follow Earth's curvature
+                        
+                    currentRoute = mMap.addPolyline(options);
+                    
+                    // Move camera to show the route
+                    mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(origin, 12));
+                    
+                    // Show route info if available
+                    if (!result.routes.isEmpty() && !result.routes.get(0).legs.isEmpty()) {
+                        DirectionsResponse.Leg leg = result.routes.get(0).legs.get(0);
+                        if (leg.distance != null && leg.duration != null) {
+                            String routeInfo = "Distance: " + leg.distance.text + 
+                                               " | Duration: " + leg.duration.text;
+                            Toast.makeText(MainPage.this, routeInfo, Toast.LENGTH_LONG).show();
+                        }
+                    }
+                } catch (Exception e) {
+                    Toast.makeText(MainPage.this, "Error processing route: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
             }
 
             @Override public void onFailure(Call<DirectionsResponse> call, Throwable t) {
-                Toast.makeText(MainPage.this, "Error fetching route", Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainPage.this, "Error fetching route: " + t.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
     }
@@ -332,26 +430,117 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 selectedEnd.latitude, selectedEnd.longitude,
                 results
         );
-        float distanceTraveled = results[0];  // distance in meters
+        float distanceInMeters = results[0];  // distance in meters
 
-        // Create a map to store the data
+        // Create a map to store the data for ride_logs collection
         Map<String, Object> rideData = new HashMap<>();
-        rideData.put("distance_traveled", distanceTraveled);
-        rideData.put("location", selectedEnd.latitude + "," + selectedEnd.longitude);
+        rideData.put("distance_traveled", distanceInMeters);
+        rideData.put("location", selectedEndName);
         rideData.put("timestamp", timestamp);
 
-        // Get a reference to the "location_logs" -> "logs" node in Firebase
-        DatabaseReference locationLogsRef = FirebaseDatabase.getInstance().getReference("location_logs").child("logs").push();
-
+        // Save to the "ride_logs" collection
         FirebaseFirestore firestore = FirebaseFirestore.getInstance();
         firestore.collection("ride_logs")
                 .add(rideData)
-                .addOnSuccessListener(documentReference ->
-                        Toast.makeText(MainPage.this, "Ride also logged to Firestore!", Toast.LENGTH_SHORT).show()
-                )
+                .addOnSuccessListener(documentReference -> {
+                    Toast.makeText(MainPage.this, "Ride logged successfully!", Toast.LENGTH_SHORT).show();
+                })
                 .addOnFailureListener(e ->
-                        Toast.makeText(MainPage.this, "Error logging to Firestore", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(MainPage.this, "Error logging ride data", Toast.LENGTH_SHORT).show()
                 );
+
+        // Also log to the original location_logs if needed
+        DatabaseReference locationLogsRef = FirebaseDatabase.getInstance().getReference("location_logs").child("logs").push();
+        Map<String, Object> logData = new HashMap<>();
+        logData.put("distance_traveled", distanceInMeters);
+        logData.put("location", selectedEnd.latitude + "," + selectedEnd.longitude);
+        logData.put("timestamp", timestamp);
+        locationLogsRef.setValue(logData);
+    }
+    
+    private void updateUserStats(String userId, double distanceInKm) {
+        FirebaseFirestore firestore = FirebaseFirestore.getInstance();
+        DocumentReference userRef = firestore.collection("users").document(userId);
+        
+        firestore.runTransaction(transaction -> {
+            DocumentSnapshot snapshot = transaction.get(userRef);
+            
+            // Get current stats or initialize if not exists
+            String totalRidesStr = snapshot.exists() ? snapshot.getString("totalRides") : "0";
+            String totalDistanceStr = snapshot.exists() ? snapshot.getString("totalDistance") : "0";
+            
+            // Parse current values
+            int totalRides = 0;
+            double totalDistance = 0;
+            try {
+                totalRides = Integer.parseInt(totalRidesStr);
+                totalDistance = Double.parseDouble(totalDistanceStr.replace(" km", ""));
+            } catch (NumberFormatException e) {
+                // Use defaults if parsing fails
+            }
+            
+            // Update with new ride
+            totalRides++;
+            totalDistance += distanceInKm;
+            
+            // Format and save
+            Map<String, Object> updates = new HashMap<>();
+            updates.put("totalRides", String.valueOf(totalRides));
+            updates.put("totalDistance", String.format(Locale.getDefault(), "%.1f km", totalDistance));
+            
+            transaction.set(userRef, updates, SetOptions.merge());
+            return null;
+        });
+    }
+
+    private void loadUserProfileData(View headerView) {
+        TextView profileName = headerView.findViewById(R.id.profileName);
+        TextView profileEmail = headerView.findViewById(R.id.profileEmail);
+        ImageView profileImage = headerView.findViewById(R.id.profileImage);
+        
+        // Get current Firebase user
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (currentUser != null && currentUser.getEmail() != null) {
+            // Set email from Firebase Auth
+            profileEmail.setText(currentUser.getEmail());
+            
+            // Get username from Firestore
+            FirebaseFirestore db = FirebaseFirestore.getInstance();
+            db.collection("users").document(currentUser.getUid())
+                .get()
+                .addOnSuccessListener(documentSnapshot -> {
+                    if (documentSnapshot.exists()) {
+                        String username = documentSnapshot.getString("username");
+                        String profileImageUrl = documentSnapshot.getString("profileImageUrl");
+                        
+                        if (username != null && !username.isEmpty()) {
+                            profileName.setText(username);
+                        }
+                        
+                        // Load profile image if it exists
+                        if (profileImageUrl != null && !profileImageUrl.isEmpty()) {
+                            // Use Picasso library to load and cache the image
+                            com.squareup.picasso.Picasso.get()
+                                .load(profileImageUrl)
+                                .placeholder(R.drawable.baseline_person_outline_24)
+                                .error(R.drawable.baseline_person_outline_24)
+                                .into(profileImage);
+                        }
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    // In case of error, leave default text
+                });
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        
+        // Refresh user profile data in navigation header when returning to this screen
+        View headerView = navigationView.getHeaderView(0);
+        loadUserProfileData(headerView);
     }
 }
 

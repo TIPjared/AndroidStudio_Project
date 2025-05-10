@@ -1,36 +1,92 @@
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:orientation="vertical"
-    android:gravity="center"
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="200dp"
-    android:background="@color/purple_200"
-    android:padding="16dp">
+    android:layout_height="wrap_content"
+    android:background="@drawable/nav_header_gradient"
+    android:paddingStart="24dp"
+    android:paddingTop="48dp"
+    android:paddingEnd="24dp"
+    android:paddingBottom="16dp">
 
-    <ImageView
-        android:id="@+id/profileImage"
+    <!-- Profile Container -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/profileContainer"
         android:layout_width="80dp"
         android:layout_height="80dp"
-        android:src="@drawable/baseline_person_outline_24"
-        android:scaleType="centerCrop" />
+        app:cardCornerRadius="40dp"
+        app:cardElevation="8dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackgroundBorderless"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
 
+        <ImageView
+            android:id="@+id/profileImage"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            android:src="@drawable/baseline_person_outline_24"
+            android:contentDescription="@string/user_name" />
+            
+        <!-- Camera icon overlay removed -->
+    </androidx.cardview.widget.CardView>
+
+    <!-- User Info -->
     <TextView
         android:id="@+id/profileName"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/user_name"
-        android:textColor="@android:color/black"
-        android:textSize="16sp"
-        android:layout_marginTop="8dp" />
+        android:layout_marginTop="16dp"
+        android:text="User Name"
+        android:textColor="#FFFFFF"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/profileContainer" />
 
     <TextView
-        android:id="@+id/profileLink"
-        android:layout_width="wrap_content"
+        android:id="@+id/profileEmail"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Profile"
-        android:textColor="@android:color/holo_blue_dark"
+        android:layout_marginTop="4dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="user@email.com"
+        android:textColor="#E8F5E9"
         android:textSize="14sp"
-        android:layout_marginTop="8dp"
-        android:clickable="true"
-        android:focusable="true" />
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/profileName" />
 
-</LinearLayout>
+    <!-- View Profile Button -->
+    <Button
+        android:id="@+id/profileLink"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/button_outline_white"
+        android:clickable="true"
+        android:focusable="true"
+        android:drawableStart="@drawable/baseline_edit_24"
+        android:drawablePadding="8dp"
+        android:drawableTint="#FFFFFF"
+        android:gravity="center"
+        android:onClick="goToProfile"
+        android:paddingStart="16dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="8dp"
+        android:text="VIEW PROFILE"
+        android:textAlignment="center"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/profileEmail"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
