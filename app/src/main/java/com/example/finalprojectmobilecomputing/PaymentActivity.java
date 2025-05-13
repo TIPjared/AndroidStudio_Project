@@ -61,24 +61,37 @@ public class PaymentActivity extends AppCompatActivity {
         // Create source body for GCash payment
         Map<String, Object> attributes = new HashMap<>();
         attributes.put("amount", 10000);
-        attributes.put("redirect", Map.of(
-                "success", "https://sikad-static.onrender.com/?payment=success",
-                "failed", "https://sikad-static.onrender.com/payment-failed.html"
-        ));
+        
+        Map<String, String> redirect = new HashMap<>();
+        redirect.put("success", "https://sikad-static.onrender.com/?payment=success");
+        redirect.put("failed", "https://sikad-static.onrender.com/?payment=failed");
+        attributes.put("redirect", redirect);
+        
         attributes.put("type", "gcash");
         attributes.put("currency", "PHP");
 
+        Map<String, Object> dataAttributes = new HashMap<>();
+        dataAttributes.put("attributes", attributes);
+        
         Map<String, Object> data = new HashMap<>();
-        data.put("data", Map.of("attributes", attributes));
+        data.put("data", dataAttributes);
 
-        api.createSource(data).enqueue(new Callback<>() {
+        api.createSource(data).enqueue(new Callback<Map<String, Object>>() {
             @Override
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                 if (response.isSuccessful() && response.body() != null) {
                     try {
                         // Extract checkout URL from response
-                        Map<String, Object> sourceData = (Map<String, Object>) ((Map<String, Object>) response.body().get("data")).get("attributes");
-                        String checkoutUrl = (String) ((Map<String, Object>) sourceData.get("redirect")).get("checkout_url");
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> responseData = (Map<String, Object>) response.body().get("data");
+                        
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> sourceData = (Map<String, Object>) responseData.get("attributes");
+                        
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> redirectData = (Map<String, Object>) sourceData.get("redirect");
+                        
+                        String checkoutUrl = (String) redirectData.get("checkout_url");
 
                         // Redirect to PayMongo's checkout URL for GCash payment
                         startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(checkoutUrl)));

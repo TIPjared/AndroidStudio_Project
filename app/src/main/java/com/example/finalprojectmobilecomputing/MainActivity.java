@@ -3,6 +3,7 @@ package com.example.finalprojectmobilecomputing;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.InputType;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
@@ -22,6 +23,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInClient;
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.tasks.Task;
+import com.google.android.material.textfield.TextInputEditText;
 import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -30,12 +32,12 @@ import com.google.firebase.auth.GoogleAuthProvider;
 public class MainActivity extends AppCompatActivity {
 
     private FirebaseAuth mAuth;
-    private EditText emailField, passwordField;
+    private TextInputEditText emailField, passwordField;
     private Button loginButton;
-    private TextView goToSignup;
+    private TextView goToSignup, forgotPasswordLink;
     private static final int RC_SIGN_IN = 123;
     private GoogleSignInClient mGoogleSignInClient;
-    private ImageButton googleSignInButton;
+    private View googleSignInButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -51,11 +53,13 @@ public class MainActivity extends AppCompatActivity {
 
         mAuth = FirebaseAuth.getInstance();
 
+        // Initialize UI elements with updated IDs
         emailField = findViewById(R.id.emailField);
         passwordField = findViewById(R.id.passwordField);
         loginButton = findViewById(R.id.loginButton);
         googleSignInButton = findViewById(R.id.googleSignInButton);
         goToSignup = findViewById(R.id.goToSignup);
+        forgotPasswordLink = findViewById(R.id.forgotPasswordLink);
 
         // Check if already logged in
         FirebaseUser currentUser = mAuth.getCurrentUser();
@@ -73,24 +77,19 @@ public class MainActivity extends AppCompatActivity {
 
         mGoogleSignInClient = GoogleSignIn.getClient(this, gso);
 
+        // Set click listeners
         googleSignInButton.setOnClickListener(view -> signInWithGoogle());
         loginButton.setOnClickListener(view -> loginWithEmail());
-
+        
         goToSignup.setOnClickListener(view -> {
             Intent intent = new Intent(MainActivity.this, SignUpActivity.class);
             startActivity(intent);
         });
-
-        ImageView passwordToggle = findViewById(R.id.passwordToggle);
-        passwordToggle.setOnClickListener(v -> {
-            if (passwordField.getInputType() == (InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD)) {
-                passwordField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
-                passwordToggle.setImageResource(R.drawable.baseline_visibility_24);
-            } else {
-                passwordField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-                passwordToggle.setImageResource(R.drawable.baseline_visibility_off_24);
-            }
-            passwordField.setSelection(passwordField.getText().length());
+        
+        // Add forgot password link functionality
+        forgotPasswordLink.setOnClickListener(view -> {
+            Intent intent = new Intent(MainActivity.this, ForgotPasswordActivity.class);
+            startActivity(intent);
         });
     }
 
@@ -114,13 +113,13 @@ public class MainActivity extends AppCompatActivity {
                 .addOnCompleteListener(this, task -> {
                     if (task.isSuccessful()) {
                         FirebaseUser user = mAuth.getCurrentUser();
-                        //Intent intent = new Intent(MainActivity.this, OTPVerification.class);
-                        //intent.putExtra("phoneNumber", user.getPhoneNumber()); // if available
-                        //startActivity(intent);
+                        Intent intent = new Intent(MainActivity.this, OTPVerification.class);
+                        intent.putExtra("phoneNumber", user.getPhoneNumber()); // if available
+                        startActivity(intent);
 
                         //BYPASS OTP (TEMPORARY)
-                        Intent intent = new Intent(MainActivity.this, MainPage.class);
-                        startActivity(intent);
+                        //Intent intent = new Intent(MainActivity.this, MainPage.class);
+                        //startActivity(intent);
                         finish();
                     } else {
                         Toast.makeText(MainActivity.this, "Login failed: " + task.getException().getMessage(), Toast.LENGTH_SHORT).show();
