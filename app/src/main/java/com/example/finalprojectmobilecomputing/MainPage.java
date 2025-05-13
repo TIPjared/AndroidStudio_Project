@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.drawable.Drawable;
 import android.location.Location;
 import android.net.Uri;
 import android.os.Bundle;
@@ -104,6 +105,8 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         endLocationTextView   = findViewById(R.id.endLocationTextView);
 
         packingAssistantButton = findViewById(R.id.PackingAssistantButton);
+
+        // XML layout already handles the icon positioning for proper centering
 
         // Firebase reference for logging rides
         rideLogsRef = FirebaseDatabase.getInstance().getReference("rideLogs");
