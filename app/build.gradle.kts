@@ -72,6 +72,12 @@ dependencies {
     implementation(libs.firebase.inappmessaging)
     implementation(libs.firebase.database)
     implementation(libs.firebase.storage)
+
+    // AI Dependency
+
+    implementation(libs.generativeai)
+
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)

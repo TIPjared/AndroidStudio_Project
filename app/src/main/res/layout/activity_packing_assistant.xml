@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:id="@+id/PackingAssistant"
+    android:layout_height="match_parent"
+    tools:context=".PackingAssistantActivity">
+
+    <!-- User input field -->
+    <EditText
+        android:id="@+id/user_input"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:hint="Enter your trip description"
+        app:layout_constraintBottom_toTopOf="@id/submit_button"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        android:padding="16dp"
+        android:inputType="text"/>
+
+    <!-- Submit button -->
+    <Button
+        android:id="@+id/submit_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Get Packing List"
+        app:layout_constraintBottom_toTopOf="@id/ai_response"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/user_input"
+        android:layout_marginTop="16dp"/>
+
+    <!-- Text view for AI response -->
+    <TextView
+        android:id="@+id/ai_response"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:text="AI's Packing List will appear here"
+        android:padding="16dp"
+        android:textSize="16sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/submit_button" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

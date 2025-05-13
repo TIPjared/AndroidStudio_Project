@@ -68,6 +68,8 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     private Button payButton;
     private Button selectRouteButton;
     private Button stopButton;
+    private Button packingAssistantButton;
+
     private Button changeDestinationButton;
     private TextView startLocationTextView;
     private TextView endLocationTextView;
@@ -100,6 +102,8 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
         startLocationTextView = findViewById(R.id.startLocationTextView);
         endLocationTextView   = findViewById(R.id.endLocationTextView);
+
+        packingAssistantButton = findViewById(R.id.PackingAssistantButton);
 
         // Firebase reference for logging rides
         rideLogsRef = FirebaseDatabase.getInstance().getReference("rideLogs");
@@ -156,7 +160,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         // --- Pay / Cancel Transaction flow ---
         payButton.setOnClickListener(v -> {
             if (!transactionAuthorized) {
-                startActivity(new Intent(this, PaymentActivity.class));
+                startActivity(new Intent(this, QRScannerActivity.class));
             } else {
                 confirmCancelTransaction();
             }
@@ -190,6 +194,11 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         changeDestinationButton.setOnClickListener(v -> {
             resetRoute();
             Toast.makeText(this, "Please select a new destination marker.", Toast.LENGTH_SHORT).show();
+        });
+
+        packingAssistantButton.setOnClickListener(v -> {
+            Intent intent = new Intent(MainPage.this, PackingAssistantActivity.class);
+            startActivity(intent);
         });
 
         // --- Map fragment init ---

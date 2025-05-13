@@ -52,7 +52,7 @@
             android:elevation="6dp"
             app:cardBackgroundColor="#CC444444"
             app:cardCornerRadius="16dp"
-            app:layout_constraintBottom_toTopOf="@id/payButton"
+            app:layout_constraintBottom_toTopOf="@id/PackingAssistantButton"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent">
 
@@ -66,7 +66,7 @@
                     android:id="@+id/startLocationTextView"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="You: 14.5454452, 121.0978889"
+                    android:text="You:"
                     android:textSize="16sp"
                     android:textColor="#FFFFFF"
                     android:textStyle="bold"
@@ -118,9 +118,26 @@
                     android:textColor="#FFFFFF"
                     app:cornerRadius="8dp"
                     android:fontFamily="sans-serif-medium" />
+
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
+        <Button
+            android:id="@+id/PackingAssistantButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="Ask AI Recommendation"
+            android:layout_margin="16dp"
+            android:backgroundTint="#4CAF50"
+            android:padding="12dp"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
+            android:textSize="16sp"
+            app:cornerRadius="8dp"
+            android:fontFamily="sans-serif-medium"
+            app:layout_constraintBottom_toTopOf="@id/payButton"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
 
         <!-- Pay Now / Cancel Transaction Button -->
         <Button

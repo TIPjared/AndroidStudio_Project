@@ -113,13 +113,13 @@ public class MainActivity extends AppCompatActivity {
                 .addOnCompleteListener(this, task -> {
                     if (task.isSuccessful()) {
                         FirebaseUser user = mAuth.getCurrentUser();
-                        //Intent intent = new Intent(MainActivity.this, OTPVerification.class);
-                        //intent.putExtra("phoneNumber", user.getPhoneNumber()); // if available
-                        //startActivity(intent);
+                        Intent intent = new Intent(MainActivity.this, OTPVerification.class);
+                        intent.putExtra("phoneNumber", user.getPhoneNumber()); // if available
+                        startActivity(intent);
 
                         //BYPASS OTP (TEMPORARY)
-                        Intent intent = new Intent(MainActivity.this, MainPage.class);
-                        startActivity(intent);
+                        //Intent intent = new Intent(MainActivity.this, MainPage.class);
+                        //startActivity(intent);
                         finish();
                     } else {
                         Toast.makeText(MainActivity.this, "Login failed: " + task.getException().getMessage(), Toast.LENGTH_SHORT).show();
