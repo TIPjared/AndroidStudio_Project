@@ -9,7 +9,7 @@
         android:id="@+id/splashImage"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:src="@drawable/splashimage"
+        android:src="@drawable/pedalgo"
         android:scaleType="centerCrop"
         android:layout_centerInParent="true" />
 

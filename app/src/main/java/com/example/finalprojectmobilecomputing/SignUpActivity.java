@@ -79,31 +79,51 @@ public class SignUpActivity extends AppCompatActivity {
         if (email.isEmpty() || password.isEmpty() || confirmPassword.isEmpty() || phone.isEmpty()) {
             Toast.makeText(SignUpActivity.this, "Please fill in all fields", Toast.LENGTH_SHORT).show();
         } else if (!password.equals(confirmPassword)) {
-            Toast.makeText(SignUpActivity.this, "Passwords do not match", Toast.LENGTH_SHORT).show();
+        Toast.makeText(SignUpActivity.this, "Passwords do not match", Toast.LENGTH_SHORT).show();
+        } else if (!isStrongPassword(password)) {
+        Toast.makeText(SignUpActivity.this, "Password must be at least 8 characters and include upper, lower, digit, and special character.", Toast.LENGTH_LONG).show();
         } else {
-            mAuth.createUserWithEmailAndPassword(email, password)
-                    .addOnCompleteListener(this, task -> {
-                        if (task.isSuccessful()) {
-                            String userId = mAuth.getCurrentUser().getUid();
-
-                            // Save additional user info to Firestore
-                            FirebaseFirestore db = FirebaseFirestore.getInstance();
-                            db.collection("users").document(userId).set(new UserModel(email, phone))
-                                    .addOnSuccessListener(aVoid -> {
-                                        Toast.makeText(SignUpActivity.this, "Account created! Please log in.", Toast.LENGTH_SHORT).show();
-                                        startActivity(new Intent(SignUpActivity.this, MainActivity.class));
-                                        finish();
-                                    })
-                                    .addOnFailureListener(e -> {
-                                        Toast.makeText(SignUpActivity.this, "Failed to save phone: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                                    });
+            FirebaseFirestore db = FirebaseFirestore.getInstance();
+            db.collection("users")
+                    .whereEqualTo("phone", phone)
+                    .get()
+                    .addOnSuccessListener(queryDocumentSnapshots -> {
+                        if (!queryDocumentSnapshots.isEmpty()) {
+                            Toast.makeText(SignUpActivity.this, "Phone number already registered", Toast.LENGTH_SHORT).show();
                         } else {
-                            Toast.makeText(SignUpActivity.this, "Sign up failed: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
+                            // Proceed with registration
+                            mAuth.createUserWithEmailAndPassword(email, password)
+                                    .addOnCompleteListener(this, task -> {
+                                        if (task.isSuccessful()) {
+                                            String userId = mAuth.getCurrentUser().getUid();
+
+                                            db.collection("users").document(userId).set(new UserModel(email, phone))
+                                                    .addOnSuccessListener(aVoid -> {
+                                                        Toast.makeText(SignUpActivity.this, "Account created! Please log in.", Toast.LENGTH_SHORT).show();
+                                                        startActivity(new Intent(SignUpActivity.this, MainActivity.class));
+                                                        finish();
+                                                    })
+                                                    .addOnFailureListener(e -> {
+                                                        Toast.makeText(SignUpActivity.this, "Failed to save phone: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                                                    });
+                                        } else {
+                                            Toast.makeText(SignUpActivity.this, "Sign up failed: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
+                                        }
+                                    });
                         }
+                    })
+                    .addOnFailureListener(e -> {
+                        Toast.makeText(SignUpActivity.this, "Error checking phone: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                     });
+
         }
     }
 
+    private boolean isStrongPassword(String password) {
+        // At least 8 characters, 1 digit, 1 lower, 1 upper, 1 special char
+        String passwordPattern = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=!]).{8,}$";
+        return password.matches(passwordPattern);
+    }
     private void signUpWithGoogle() {
         Intent signInIntent = mGoogleSignInClient.getSignInIntent();
         startActivityForResult(signInIntent, RC_SIGN_IN);

@@ -299,6 +299,8 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         addPredefinedMarker("Cathedral",      new LatLng(14.59147, 120.97356)); // :contentReference[oaicite:3]{index=3}
         addPredefinedMarker("Museum",         new LatLng(14.5869, 120.9812)); // :contentReference[oaicite:4]{index=4}
         addPredefinedMarker("Quiapo Church",  new LatLng(14.598782, 120.983783)); // :contentReference[oaicite:5]{index=5}
+        addPredefinedMarker("Jared Near Place",  new LatLng(14.403351, 120.891312)); // :contentReference[oaicite:5]{index=5}
+
 
         mMap.setOnMarkerClickListener(marker -> {
             selectedEnd = marker.getPosition();

@@ -125,6 +125,33 @@
                         android:padding="12dp" />
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
+            <!-- To Note -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardBackgroundColor="#FFFFFF"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="4dp"
+                android:layout_marginBottom="10dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:id="@+id/OTPShare"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp"
+                        android:text="Note: Don't share your OTP code with anyone. We never ask for it!"
+                        android:textColor="#212121"
+                        android:textSize="16sp"
+                        android:textStyle="bold"/>
+
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
 
             <!-- Help Section Card -->
             <androidx.cardview.widget.CardView
@@ -138,6 +165,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
+                    app:layout_constraintTop_toTopOf="@+id/OTPShare"
                     android:padding="16dp">
 
                     <TextView
