@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- General -->
-    <string name="app_name">Eco Ride</string>
+    <string name="app_name">SIKAD</string>
     <string name="app_version">v1.0.0</string>
     <string name="more_options">More Options</string>
     <string name="decorative_image">Decorative Image</string>

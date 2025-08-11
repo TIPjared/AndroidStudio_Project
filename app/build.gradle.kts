@@ -73,6 +73,8 @@ dependencies {
     implementation(libs.firebase.database)
     implementation(libs.firebase.storage)
 
+    implementation ("com.google.maps.android:android-maps-utils:2.3.0")
+
     // AI Dependency
 
     implementation(libs.generativeai)

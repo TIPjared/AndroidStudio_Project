@@ -52,7 +52,7 @@
             android:elevation="6dp"
             app:cardBackgroundColor="#CC444444"
             app:cardCornerRadius="16dp"
-            app:layout_constraintBottom_toTopOf="@id/PackingAssistantButton"
+            app:layout_constraintBottom_toTopOf="@id/payButton"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent">
 
@@ -63,37 +63,34 @@
                 android:padding="16dp">
 
                 <TextView
-                    android:id="@+id/startLocationTextView"
-                    android:layout_width="match_parent"
+                    android:id="@+id/elapsedTimeTextView"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="You:"
-                    android:textSize="16sp"
+                    android:text="Elapsed: 00:00"
                     android:textColor="#FFFFFF"
-                    android:textStyle="bold"
-                    android:fontFamily="sans-serif-medium" />
+                    android:textSize="16sp"
+                    android:layout_marginBottom="8dp"
+                    android:visibility="gone" />
 
                 <TextView
-                    android:id="@+id/endLocationTextView"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Destination: Rizal Park"
-                    android:textSize="16sp"
-                    android:layout_marginTop="8dp"
-                    android:textColor="#FFFFFF"
-                    android:textStyle="bold"
-                    android:fontFamily="sans-serif-medium" />
-
-                <Button
-                    android:id="@+id/selectRouteButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:text="Choose Location"
+                    android:id="@+id/distanceTextView"
+                    android:layout_width="wrap_content"
                     android:visibility="gone"
-                    android:backgroundTint="#3F51B5"
+                    android:layout_height="wrap_content"
+                    android:text="Distance: 0.00 m"
                     android:textColor="#FFFFFF"
-                    app:cornerRadius="8dp"
-                    android:fontFamily="sans-serif-medium" />
+                    android:textSize="16sp"
+                    android:layout_marginBottom="8dp"/>
+
+                <TextView
+                    android:id="@+id/timerTextView"
+                    android:visibility="gone"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Time: 00:00"
+                    android:textColor="#FFFFFF"
+                    android:textSize="16sp"
+                    android:layout_marginBottom="8dp"/>
 
                 <Button
                     android:id="@+id/stopButton"
@@ -107,41 +104,8 @@
                     app:cornerRadius="8dp"
                     android:fontFamily="sans-serif-medium" />
 
-                <Button
-                    android:id="@+id/changeDestinationButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:text="Change Destination"
-                    android:visibility="gone"
-                    android:backgroundTint="#3F51B5"
-                    android:textColor="#FFFFFF"
-                    app:cornerRadius="8dp"
-                    android:fontFamily="sans-serif-medium" />
-
             </LinearLayout>
         </androidx.cardview.widget.CardView>
-
-        <Button
-            android:id="@+id/PackingAssistantButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:text="Ask AI Recommendation"
-            android:layout_margin="16dp"
-            android:backgroundTint="#4CAF50"
-            android:padding="12dp"
-            android:textColor="#FFFFFF"
-            android:textStyle="bold"
-            android:textSize="16sp"
-            android:drawableLeft="@drawable/baseline_luggage_24"
-            android:drawablePadding="12dp"
-            android:drawableTint="#FFFFFF"
-            android:gravity="center"
-            app:cornerRadius="8dp"
-            android:fontFamily="sans-serif-medium"
-            app:layout_constraintBottom_toTopOf="@id/payButton"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
 
         <!-- Pay Now / Cancel Transaction Button -->
         <Button
@@ -160,6 +124,7 @@
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
+
     </androidx.constraintlayout.widget.ConstraintLayout>
 
     <!-- Navigation Drawer -->
