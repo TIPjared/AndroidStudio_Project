@@ -85,8 +85,8 @@
             android:id="@+id/loginlanding"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Login"
-            android:backgroundTint="#2a8743" />
+            android:backgroundTint="#2a8743"
+            android:text="Login" />
 
         <Button
             android:id="@+id/signuplanding"

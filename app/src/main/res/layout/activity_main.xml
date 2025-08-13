@@ -14,14 +14,21 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        app:layout_constraintGuide_percent="0.05" />
+        app:layout_constraintGuide_percent="0.08" />
 
     <androidx.constraintlayout.widget.Guideline
         android:id="@+id/endGuide"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        app:layout_constraintGuide_percent="0.95" />
+        app:layout_constraintGuide_percent="0.92" />
+        
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/centerGuide"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_percent="0.5" />
 
     <androidx.constraintlayout.widget.Guideline
         android:id="@+id/topGuide"
@@ -33,128 +40,162 @@
     <!-- Welcome Text -->
     <TextView
         android:id="@+id/textView3"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Welcome To PedalGo!"
+        android:text="Welcome To Sikad!"
         android:textColor="@color/white"
-        android:textSize="25sp"
+        android:textSize="@dimen/title_text_size"
         android:fontFamily="sans-serif-black"
+        android:gravity="center"
+        android:maxLines="2"
+        android:autoSizeTextType="uniform"
+        android:autoSizeMinTextSize="20sp"
+        android:autoSizeMaxTextSize="28sp"
         app:layout_constraintStart_toStartOf="@id/startGuide"
+        app:layout_constraintEnd_toEndOf="@id/endGuide"
         app:layout_constraintTop_toTopOf="@id/topGuide" />
 
     <!-- Sign In Text -->
     <TextView
         android:id="@+id/textView4"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:text="Sign in!"
         android:textColor="@color/white"
-        android:textSize="25sp"
+        android:textSize="@dimen/subtitle_text_size"
         android:fontFamily="sans-serif-black"
+        android:gravity="center"
+        android:autoSizeTextType="uniform"
+        android:autoSizeMinTextSize="18sp"
+        android:autoSizeMaxTextSize="25sp"
         app:layout_constraintStart_toStartOf="@id/startGuide"
+        app:layout_constraintEnd_toEndOf="@id/endGuide"
         app:layout_constraintTop_toBottomOf="@+id/textView3" />
 
-    <!-- Email Label -->
-    <TextView
-        android:id="@+id/textView5"
+    <!-- Login Form Card Container -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/loginFormContainer"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Email"
-        android:textColor="#008000"
-        android:textSize="20sp"
-        android:paddingTop="80dp"
+        android:layout_marginTop="@dimen/margin_xlarge"
+        app:cardCornerRadius="@dimen/card_corner_radius"
+        app:cardBackgroundColor="#FFFFFF"
+        app:cardElevation="@dimen/card_elevation"
         app:layout_constraintEnd_toEndOf="@id/endGuide"
         app:layout_constraintStart_toStartOf="@id/startGuide"
-        app:layout_constraintTop_toBottomOf="@+id/textView4" />
+        app:layout_constraintTop_toBottomOf="@+id/textView4">
 
-    <!-- Email Input Field -->
-    <com.google.android.material.textfield.TextInputLayout
-        android:id="@+id/emailInputLayout"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        app:boxBackgroundColor="#FFFFFF"
-        app:boxBackgroundMode="filled"
-        app:boxCornerRadiusBottomEnd="8dp"
-        app:boxCornerRadiusBottomStart="8dp"
-        app:boxCornerRadiusTopEnd="8dp"
-        app:boxCornerRadiusTopStart="8dp"
-        app:layout_constraintEnd_toEndOf="@id/endGuide"
-        app:layout_constraintStart_toStartOf="@id/startGuide"
-        app:layout_constraintTop_toBottomOf="@+id/textView5">
-
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/emailField"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint=""
-            android:inputType="textEmailAddress"
-            android:padding="16dp" />
-    </com.google.android.material.textfield.TextInputLayout>
+            android:orientation="vertical"
+            android:padding="@dimen/input_padding">
 
-    <!-- Password Label -->
-    <TextView
-        android:id="@+id/textView"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:text="Password"
-        android:textColor="#008000"
-        android:textSize="20sp"
-        android:layout_marginTop="16dp"
-        app:layout_constraintEnd_toEndOf="@id/endGuide"
-        app:layout_constraintStart_toStartOf="@id/startGuide"
-        app:layout_constraintTop_toBottomOf="@+id/emailInputLayout" />
+            <!-- Email Label -->
+            <TextView
+                android:id="@+id/textView5"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Email"
+                android:textColor="#1B5E20"
+                android:textSize="@dimen/body_text_size"
+                android:textStyle="bold"
+                android:layout_marginTop="@dimen/margin_small" />
 
-    <!-- Password Input Field with Toggle -->
-    <com.google.android.material.textfield.TextInputLayout
-        android:id="@+id/passwordLayout"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        app:boxBackgroundColor="#FFFFFF"
-        app:boxBackgroundMode="filled"
-        app:boxCornerRadiusBottomEnd="8dp"
-        app:boxCornerRadiusBottomStart="8dp"
-        app:boxCornerRadiusTopEnd="8dp"
-        app:boxCornerRadiusTopStart="8dp"
-        app:endIconMode="password_toggle"
-        app:layout_constraintEnd_toEndOf="@id/endGuide"
-        app:layout_constraintStart_toStartOf="@id/startGuide"
-        app:layout_constraintTop_toBottomOf="@+id/textView">
+            <!-- Email Input Field -->
+            <EditText
+                android:id="@+id/emailField"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@null"
+                android:hint="Enter your email"
+                android:textColorHint="@color/colorSecondaryText"
+                android:inputType="textEmailAddress"
+                android:textSize="@dimen/body_text_size"
+                android:padding="@dimen/margin_small"
+                android:textColor="#000000"
+                android:textCursorDrawable="@drawable/cursor_green"
+                android:textSelectHandle="@drawable/text_select_handle_green"
+                android:textSelectHandleLeft="@drawable/text_select_handle_left_green"
+                android:textSelectHandleRight="@drawable/text_select_handle_right_green" />
 
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/passwordField"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint=""
-            android:inputType="textPassword"
-            android:padding="16dp" />
-    </com.google.android.material.textfield.TextInputLayout>
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#E0E0E0"
+                android:layout_marginBottom="@dimen/margin_medium" />
 
-    <!-- Forgot Password Link -->
-    <TextView
-        android:id="@+id/forgotPasswordLink"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="Forgot Password?"
-        android:textColor="#2a8743"
-        android:textStyle="bold"
-        app:layout_constraintStart_toStartOf="@id/startGuide"
-        app:layout_constraintTop_toBottomOf="@+id/passwordLayout" />
+            <!-- Password Label -->
+            <TextView
+                android:id="@+id/textView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Password"
+                android:textColor="#1B5E20"
+                android:textSize="@dimen/body_text_size"
+                android:textStyle="bold" />
+
+            <!-- Password Input Field with Toggle -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/passwordLayout"
+                style="@style/SikadTextInputStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@null"
+                app:hintEnabled="false"
+                app:endIconMode="password_toggle"
+                app:endIconTint="@color/sikad_green">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/passwordField"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@null"
+                    android:hint="Enter your password"
+                    android:textColorHint="@color/colorSecondaryText"
+                    android:inputType="textPassword"
+                    android:textSize="@dimen/body_text_size"
+                    android:padding="@dimen/margin_small"
+                    android:textCursorDrawable="@drawable/cursor_green"
+                    android:textSelectHandle="@drawable/text_select_handle_green"
+                    android:textSelectHandleLeft="@drawable/text_select_handle_left_green"
+                    android:textSelectHandleRight="@drawable/text_select_handle_right_green" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#E0E0E0"
+                android:layout_marginBottom="@dimen/margin_small" />
+
+            <!-- Forgot Password Link -->
+            <TextView
+                android:id="@+id/forgotPasswordLink"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Forgot Password?"
+                android:textColor="#1B5E20"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
 
     <!-- Login Button -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/loginButton"
         android:layout_width="0dp"
-        android:layout_height="56dp"
-        android:layout_marginTop="32dp"
+        android:layout_height="@dimen/button_height"
+        android:layout_marginTop="@dimen/margin_medium"
         android:backgroundTint="#2a8743"
         android:text="Login with Email"
-        android:textSize="16sp"
-        app:cornerRadius="8dp"
-        app:elevation="4dp"
+        android:textColor="#FFFFFF"
+        android:textSize="@dimen/body_text_size"
+        android:textStyle="bold"
+        app:cornerRadius="@dimen/input_corner_radius"
+        app:elevation="@dimen/card_elevation"
         app:layout_constraintEnd_toEndOf="@id/endGuide"
         app:layout_constraintStart_toStartOf="@id/startGuide"
-        app:layout_constraintTop_toBottomOf="@+id/forgotPasswordLink" />
+        app:layout_constraintTop_toBottomOf="@+id/loginFormContainer" />
 
     <!-- OR Text -->
     <TextView

@@ -29,7 +29,7 @@ import java.util.Locale;
 public class PrivacySettingsActivity extends AppCompatActivity {
 
     // Constants for SharedPreferences
-    private static final String PREFS_NAME = "PedalGoPrivacyPrefs";
+    private static final String PREFS_NAME = "SikadPrivacyPrefs";
     private static final String KEY_SHARE_RIDE_HISTORY = "share_ride_history";
     private static final String KEY_SHOW_ON_LEADERBOARDS = "show_on_leaderboards";
     private static final String KEY_SHARE_ACHIEVEMENTS = "share_achievements";
@@ -156,8 +156,8 @@ public class PrivacySettingsActivity extends AppCompatActivity {
         downloadDataButton.setOnClickListener(v -> downloadUserData());
         
         // Legal information options
-        privacyPolicyOption.setOnClickListener(v -> openWebPage("https://pedalgo.com/privacy-policy"));
-        termsOfServiceOption.setOnClickListener(v -> openWebPage("https://pedalgo.com/terms-of-service"));
+        privacyPolicyOption.setOnClickListener(v -> openWebPage("https://sikad.com/privacy-policy"));
+        termsOfServiceOption.setOnClickListener(v -> openWebPage("https://sikad.com/terms-of-service"));
     }
     
     private void savePreference(String key, boolean value) {
@@ -285,7 +285,7 @@ public class PrivacySettingsActivity extends AppCompatActivity {
     private void saveDataToFile(String data) {
         try {
             // Create filename with current date
-            String fileName = "PedalGo_Data_" + 
+            String fileName = "Sikad_Data_" + 
                     new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ".csv";
             
             // Get the Downloads directory

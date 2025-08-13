@@ -9,5 +9,8 @@
     <color name="colorCardBackground">#FFFFFF</color>
     <color name="colorLightCard">#F5F5F5</color>
     <color name="colorText">#222222</color>
-    <color name="colorSecondaryText">#757575</color>
+    <color name="colorSecondaryText">#616161</color>
+    <color name="sikad_green">#2a8743</color>
+    <color name="sikad_green_light">#4CAF50</color>
+    <color name="sikad_green_dark">#1B5E20</color>
 </resources>

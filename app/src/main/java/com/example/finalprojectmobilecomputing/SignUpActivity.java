@@ -9,6 +9,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
+import android.os.Handler;
 
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
@@ -57,17 +60,65 @@ public class SignUpActivity extends AppCompatActivity {
 
         mGoogleSignInClient = GoogleSignIn.getClient(this, gso);
 
-        // Set click listeners
-        signUpButton.setOnClickListener(view -> signUp());
+        // Set click listeners with animations
+        signUpButton.setOnClickListener(view -> {
+            animateButton(signUpButton);
+            new Handler().postDelayed(() -> signUp(), 100);
+        });
 
         goToLogin.setOnClickListener(view -> {
-            Intent loginIntent = new Intent(SignUpActivity.this, MainActivity.class);
-            startActivity(loginIntent);
-            finish();
+            animateButton(goToLogin);
+            new Handler().postDelayed(() -> {
+                Intent loginIntent = new Intent(SignUpActivity.this, MainActivity.class);
+                startActivity(loginIntent);
+                overridePendingTransition(R.anim.activity_slide_in_left, R.anim.activity_slide_out_right);
+                finish();
+            }, 100);
         });
 
         // Google sign-up button
-        googleSignUpButton.setOnClickListener(view -> signUpWithGoogle());
+        googleSignUpButton.setOnClickListener(view -> {
+            animateButton(googleSignUpButton);
+            new Handler().postDelayed(() -> signUpWithGoogle(), 100);
+        });
+        
+        // Start animations
+        startSignUpAnimations();
+    }
+    
+    private void startSignUpAnimations() {
+        // Animate title texts
+        TextView titleText = findViewById(R.id.textView8);
+        TextView subtitleText = findViewById(R.id.textView9);
+        
+        Animation fadeIn = AnimationUtils.loadAnimation(this, R.anim.fade_in);
+        Animation slideInLeft = AnimationUtils.loadAnimation(this, R.anim.slide_in_left);
+        Animation slideUp = AnimationUtils.loadAnimation(this, R.anim.slide_up);
+        Animation bounceIn = AnimationUtils.loadAnimation(this, R.anim.bounce_in);
+        
+        // Stagger animations
+        titleText.startAnimation(fadeIn);
+        
+        new Handler().postDelayed(() -> {
+            subtitleText.startAnimation(slideInLeft);
+        }, 200);
+        
+        new Handler().postDelayed(() -> {
+            findViewById(R.id.mainCardContainer).startAnimation(slideUp);
+        }, 400);
+        
+        new Handler().postDelayed(() -> {
+            signUpButton.startAnimation(bounceIn);
+        }, 600);
+        
+        new Handler().postDelayed(() -> {
+            findViewById(R.id.googleSignInContainer).startAnimation(bounceIn);
+        }, 700);
+    }
+    
+    private void animateButton(View button) {
+        Animation buttonPress = AnimationUtils.loadAnimation(this, R.anim.button_press);
+        button.startAnimation(buttonPress);
     }
 
     private void signUp() {

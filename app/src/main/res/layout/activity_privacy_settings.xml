@@ -93,7 +93,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="16dp"
-                        android:text="Control how your data is used and shared in the PedalGo app. Your settings will be saved automatically when changed."
+                        android:text="Control how your data is used and shared in the Sikad app. Your settings will be saved automatically when changed."
                         android:textColor="#757575"
                         android:textSize="14sp" />
                 </LinearLayout>
