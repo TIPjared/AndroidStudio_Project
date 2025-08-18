@@ -204,22 +204,43 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         }
 
         payButton.setOnClickListener(v -> {
-            if (!transactionAuthorized) {
-                // Payment not done yet: go to QR scanner
-                Intent intent = new Intent(MainPage.this, QRScannerActivity.class);
-                startActivity(intent);
-
-            } else {
-                // Payment already done: this acts like STOP button
+            if ("Stop Ride".equals(payButton.getText().toString())) {
+                // If button says Stop Ride → call stopRide()
                 stopRide();
+            } else {
+                // Otherwise → normal Pay Now flow
+                if (currentLocation != null && antelBoundary != null && !antelBoundary.isEmpty()) {
+                    if (PolyUtil.containsLocation(
+                            new LatLng(currentLocation.latitude, currentLocation.longitude),
+                            antelBoundary,
+                            true
+                    )) {
+                        Intent intent = new Intent(MainPage.this, PaymentActivity.class);
+                        startActivity(intent);
+                    } else {
+                        Toast.makeText(this, "You must be inside Antel Grand Village to start a ride.", Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    Toast.makeText(this, "Waiting for current location or geofence data...", Toast.LENGTH_SHORT).show();
+                }
             }
         });
 
-        setupPaymentCallback();
-
         stopButton.setOnClickListener(v -> {
-            logRideToFirebase();
-            stopRide();
+            if (currentLocation != null && antelBoundary != null && !antelBoundary.isEmpty()) {
+                if (PolyUtil.containsLocation(
+                        new LatLng(currentLocation.latitude, currentLocation.longitude),
+                        antelBoundary,
+                        true
+                )) {
+                    Toast.makeText(this, "Ride ended successfully.", Toast.LENGTH_LONG).show();
+                    stopRide();
+                } else {
+                    Toast.makeText(this, "You must return inside the area to end your ride.", Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                Toast.makeText(this, "Waiting for current location or geofence data...", Toast.LENGTH_SHORT).show();
+            }
         });
 
 
@@ -416,32 +437,6 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     }
 
 
-    private void addAndroidGeofence(LatLng center, float radiusMeters) {
-        Geofence geofence = new Geofence.Builder()
-                .setRequestId("antel-geofence")
-                .setCircularRegion(center.latitude, center.longitude, radiusMeters)
-                .setExpirationDuration(Geofence.NEVER_EXPIRE)
-                .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER | Geofence.GEOFENCE_TRANSITION_EXIT)
-                .build();
-
-        GeofencingRequest geofencingRequest = new GeofencingRequest.Builder()
-                .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
-                .addGeofence(geofence)
-                .build();
-
-        PendingIntent geofencePendingIntent = PendingIntent.getBroadcast(
-                this, 0, new Intent(this, GeofenceBroadcastReceiver.class),
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
-        );
-
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            geofencingClient.addGeofences(geofencingRequest, geofencePendingIntent)
-                    .addOnSuccessListener(aVoid -> Log.d("GEOFENCE", "Geofence added"))
-                    .addOnFailureListener(e -> Log.e("GEOFENCE", "Failed to add geofence", e));
-        }
-    }
-
-
     @Override
     public void onMapReady(GoogleMap googleMap) {
 
@@ -458,12 +453,6 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             return false;
 
         });
-        if (antelBoundary != null && !antelBoundary.isEmpty()) {
-            LatLng center = getPolygonCenter(antelBoundary);
-            addAndroidGeofence(center, 100); // Adjust radius as needed
-        } else {
-            Log.e("MapDebug", "antelBoundary is null or empty.");
-        }
     }
 
     private void addPredefinedMarker(String title, LatLng coords) {
@@ -508,30 +497,17 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                     for (Map<String, Object> point : points) {
                         GeoPoint geoPoint = (GeoPoint) point.get("location");
                         if (geoPoint != null) {
-                            double lat = geoPoint.getLatitude();
-                            double lng = geoPoint.getLongitude();
-                            antelBoundary.add(new LatLng(lat, lng));
+                            antelBoundary.add(new LatLng(geoPoint.getLatitude(), geoPoint.getLongitude()));
                         }
                     }
 
+                    // Draw village polygon on map
                     drawGeofencePolygon();
 
-                    // Build geofences for each point (optional, or just one central)
-                    List<Geofence> geofenceList = new ArrayList<>();
-
-                    for (int i = 0; i < antelBoundary.size(); i++) {
-                        LatLng latLng = antelBoundary.get(i);
-                        Geofence geofence = new Geofence.Builder()
-                                .setRequestId("antel-point-" + i)
-                                .setCircularRegion(latLng.latitude, latLng.longitude, 100)
-                                .setExpirationDuration(Geofence.NEVER_EXPIRE)
-                                .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER | Geofence.GEOFENCE_TRANSITION_EXIT)
-                                .build();
-                        geofenceList.add(geofence);
-                    }
-
-                    addMultipleGeofences(geofenceList);
-
+                    // Add just ONE circular geofence that surrounds the whole village
+                    LatLng center = getPolygonCenter(antelBoundary);
+                    float radiusMeters = getMaxDistanceFromCenter(center, antelBoundary) + 50; // +50m buffer
+                    addWakeUpGeofence(center, radiusMeters);
                 }
             } else {
                 Log.d("Firestore", "No current data in geofence document.");
@@ -568,15 +544,17 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, padding));
     }
 
-    private void addMultipleGeofences(List<Geofence> geofenceList) {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            Log.e("GEOFENCE", "Missing location permission");
-            return;
-        }
+    private void addWakeUpGeofence(LatLng center, float radiusMeters) {
+        Geofence geofence = new Geofence.Builder()
+                .setRequestId("village-wakeup")
+                .setCircularRegion(center.latitude, center.longitude, radiusMeters)
+                .setExpirationDuration(Geofence.NEVER_EXPIRE)
+                .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER | Geofence.GEOFENCE_TRANSITION_EXIT)
+                .build();
 
         GeofencingRequest geofencingRequest = new GeofencingRequest.Builder()
                 .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
-                .addGeofences(geofenceList)
+                .addGeofence(geofence)
                 .build();
 
         PendingIntent geofencePendingIntent = PendingIntent.getBroadcast(
@@ -584,40 +562,31 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
         );
 
-        geofencingClient.addGeofences(geofencingRequest, geofencePendingIntent)
-                .addOnSuccessListener(aVoid -> Log.d("GEOFENCE", "All geofences added"))
-                .addOnFailureListener(e -> Log.e("GEOFENCE", "Failed to add geofences: " + e.getMessage()));
-    }
-
-    // Check if user is inside geofence
-    private void checkGeofence(LatLng currentLocation) {
-        if (!isInsideGeofence(currentLocation)) {
-            Toast.makeText(this, "You are outside the allowed area! Please return.", Toast.LENGTH_LONG).show();
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) {
+            geofencingClient.addGeofences(geofencingRequest, geofencePendingIntent)
+                    .addOnSuccessListener(aVoid -> Log.d("GEOFENCE", "Wake-up geofence added"))
+                    .addOnFailureListener(e -> Log.e("GEOFENCE", "Failed to add wake-up geofence", e));
         }
     }
+    private float getMaxDistanceFromCenter(LatLng center, List<LatLng> points) {
+        float maxDistance = 0;
+        Location centerLoc = new Location("");
+        centerLoc.setLatitude(center.latitude);
+        centerLoc.setLongitude(center.longitude);
 
-    private boolean isInsideGeofence(LatLng currentLocation) {
-        return PolyUtil.containsLocation(currentLocation, antelBoundary, true);
-    }
-
-    // Geofence check logic (Ray Casting)
-
-    private boolean rayCastIntersect(LatLng point, LatLng vertA, LatLng vertB) {
-        double aY = vertA.latitude;
-        double bY = vertB.latitude;
-        double aX = vertA.longitude;
-        double bX = vertB.longitude;
-        double pY = point.latitude;
-        double pX = point.longitude;
-
-        if ((aY > pY && bY > pY) || (aY < pY && bY < pY) || (aX < pX && bX < pX)) {
-            return false;
+        for (LatLng p : points) {
+            Location pointLoc = new Location("");
+            pointLoc.setLatitude(p.latitude);
+            pointLoc.setLongitude(p.longitude);
+            float distance = centerLoc.distanceTo(pointLoc);
+            if (distance > maxDistance) {
+                maxDistance = distance;
+            }
         }
-
-        double m = (bY - aY) / (bX - aX);
-        double x = (pY - aY) / m + aX;
-        return x > pX;
+        return maxDistance;
     }
+
     private void requestLocationPermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED
@@ -636,32 +605,32 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
     //Location Updates
 
-    @SuppressWarnings("deprecation") // Suppress deprecation warning
+    @SuppressWarnings("deprecation")
     private void startLocationUpdates() {
-        // Use deprecated create() method for backward compatibility
-        locationRequest = LocationRequest.create();
-        locationRequest.setInterval(5000); // Desired interval in milliseconds
-        locationRequest.setFastestInterval(2000); // Fastest acceptable interval
-        locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+        locationRequest = LocationRequest.create()
+                .setInterval(5000)
+                .setFastestInterval(2000)
+                .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
 
         locationCallback = new LocationCallback() {
             @Override
             public void onLocationResult(LocationResult locationResult) {
                 if (locationResult == null) return;
 
-                Location newLocation = locationResult.getLastLocation();
-                if (previousLocation != null) {
-                    float distance = previousLocation.distanceTo(newLocation);
-                    totalDistance += distance;
-                    distanceTextView.setText(String.format(Locale.getDefault(), "Distance: %.2f m", totalDistance));
+                Location loc = locationResult.getLastLocation();
+                LatLng currentLatLng = new LatLng(loc.getLatitude(), loc.getLongitude());
+
+                // Polygon check for precision
+                if (!PolyUtil.containsLocation(currentLatLng, antelBoundary, true)) {
+                    Toast.makeText(MainPage.this, "Outside village boundary!", Toast.LENGTH_LONG).show();
+                } else {
+                    Log.d("GEOFENCE", "Inside village boundary");
                 }
-                previousLocation = newLocation;
             }
         };
 
-
-        // Check location permission before requesting updates
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) {
             LocationServices.getFusedLocationProviderClient(this)
                     .requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper());
         }
