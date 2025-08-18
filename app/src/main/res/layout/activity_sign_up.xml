@@ -14,14 +14,14 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        app:layout_constraintGuide_percent="0.05" />
+        app:layout_constraintGuide_percent="0.08" />
 
     <androidx.constraintlayout.widget.Guideline
         android:id="@+id/endGuide"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        app:layout_constraintGuide_percent="0.95" />
+        app:layout_constraintGuide_percent="0.92" />
 
     <androidx.constraintlayout.widget.Guideline
         android:id="@+id/topGuide"
@@ -33,25 +33,37 @@
     <!-- Title Text -->
     <TextView
         android:id="@+id/textView8"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:text="Don't have an Account yet?"
         android:textColor="@color/white"
-        android:textSize="25sp"
+        android:textSize="@dimen/title_text_size"
         android:fontFamily="sans-serif-black"
+        android:gravity="center"
+        android:maxLines="2"
+        android:autoSizeTextType="uniform"
+        android:autoSizeMinTextSize="18sp"
+        android:autoSizeMaxTextSize="28sp"
         app:layout_constraintStart_toStartOf="@id/startGuide"
+        app:layout_constraintEnd_toEndOf="@id/endGuide"
         app:layout_constraintTop_toTopOf="@id/topGuide" />
 
     <!-- Subtitle Text -->
     <TextView
         android:id="@+id/textView9"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:text="Sign Up and Join the Fun!"
         android:textColor="@color/white"
-        android:textSize="25sp"
+        android:textSize="@dimen/subtitle_text_size"
         android:fontFamily="sans-serif-black"
+        android:gravity="center"
+        android:maxLines="2"
+        android:autoSizeTextType="uniform"
+        android:autoSizeMinTextSize="16sp"
+        android:autoSizeMaxTextSize="25sp"
         app:layout_constraintStart_toStartOf="@id/startGuide"
+        app:layout_constraintEnd_toEndOf="@id/endGuide"
         app:layout_constraintTop_toBottomOf="@+id/textView8" />
 
     <!-- Main Card Container for all form elements -->
@@ -59,9 +71,10 @@
         android:id="@+id/mainCardContainer"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        app:cardCornerRadius="20dp"
+        android:layout_marginTop="@dimen/margin_medium"
+        app:cardCornerRadius="@dimen/card_corner_radius"
         app:cardBackgroundColor="#FFFFFF"
+        app:cardElevation="@dimen/card_elevation"
         app:layout_constraintEnd_toEndOf="@id/endGuide"
         app:layout_constraintStart_toStartOf="@id/startGuide"
         app:layout_constraintTop_toBottomOf="@+id/textView9">
@@ -70,7 +83,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:padding="@dimen/input_padding">
 
             <!-- Email Label and Input -->
             <TextView
@@ -78,20 +91,26 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Email"
-                android:textColor="#2a8743"
-                android:textSize="16sp"
+                android:textColor="#1B5E20"
+                android:textSize="@dimen/body_text_size"
                 android:textStyle="bold"
-                android:layout_marginTop="8dp" />
+                android:layout_marginTop="@dimen/margin_small" />
 
             <EditText
                 android:id="@+id/emailEditText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="@null"
-                android:hint=""
+                android:hint="Enter your email"
+                android:textColorHint="@color/colorSecondaryText"
                 android:inputType="textEmailAddress"
-                android:padding="12dp"
-                android:textColor="#000000" />
+                android:textSize="@dimen/body_text_size"
+                android:padding="@dimen/margin_small"
+                android:textColor="#000000"
+                android:textCursorDrawable="@drawable/cursor_green"
+                android:textSelectHandle="@drawable/text_select_handle_green"
+                android:textSelectHandleLeft="@drawable/text_select_handle_left_green"
+                android:textSelectHandleRight="@drawable/text_select_handle_right_green" />
 
             <View
                 android:layout_width="match_parent"
@@ -105,25 +124,33 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Password"
-                android:textColor="#2a8743"
-                android:textSize="16sp"
+                android:textColor="#1B5E20"
+                android:textSize="@dimen/body_text_size"
                 android:textStyle="bold" />
 
             <com.google.android.material.textfield.TextInputLayout
+                style="@style/SikadTextInputStyle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="@null"
                 app:hintEnabled="false"
-                app:endIconMode="password_toggle">
+                app:endIconMode="password_toggle"
+                app:endIconTint="@color/sikad_green">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/passwordEditText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:background="@null"
-                    android:hint=""
+                    android:hint="Enter your password"
+                    android:textColorHint="@color/colorSecondaryText"
                     android:inputType="textPassword"
-                    android:padding="12dp" />
+                    android:textSize="@dimen/body_text_size"
+                    android:padding="@dimen/margin_small"
+                    android:textCursorDrawable="@drawable/cursor_green"
+                    android:textSelectHandle="@drawable/text_select_handle_green"
+                    android:textSelectHandleLeft="@drawable/text_select_handle_left_green"
+                    android:textSelectHandleRight="@drawable/text_select_handle_right_green" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <View
@@ -138,25 +165,33 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Confirm Password"
-                android:textColor="#2a8743"
-                android:textSize="16sp"
+                android:textColor="#1B5E20"
+                android:textSize="@dimen/body_text_size"
                 android:textStyle="bold" />
 
             <com.google.android.material.textfield.TextInputLayout
+                style="@style/SikadTextInputStyle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="@null"
                 app:hintEnabled="false"
-                app:endIconMode="password_toggle">
+                app:endIconMode="password_toggle"
+                app:endIconTint="@color/sikad_green">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/confirmPasswordEditText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:background="@null"
-                    android:hint=""
+                    android:hint="Confirm your password"
+                    android:textColorHint="@color/colorSecondaryText"
                     android:inputType="textPassword"
-                    android:padding="12dp" />
+                    android:textSize="@dimen/body_text_size"
+                    android:padding="@dimen/margin_small"
+                    android:textCursorDrawable="@drawable/cursor_green"
+                    android:textSelectHandle="@drawable/text_select_handle_green"
+                    android:textSelectHandleLeft="@drawable/text_select_handle_left_green"
+                    android:textSelectHandleRight="@drawable/text_select_handle_right_green" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <View
@@ -171,8 +206,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Phone Number"
-                android:textColor="#2a8743"
-                android:textSize="16sp"
+                android:textColor="#1B5E20"
+                android:textSize="@dimen/body_text_size"
                 android:textStyle="bold" />
 
             <EditText
@@ -180,10 +215,16 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="@null"
-                android:hint=""
+                android:hint="Enter your phone number"
+                android:textColorHint="@color/colorSecondaryText"
                 android:inputType="phone"
-                android:padding="12dp"
-                android:textColor="#000000" />
+                android:textSize="@dimen/body_text_size"
+                android:padding="@dimen/margin_small"
+                android:textColor="#000000"
+                android:textCursorDrawable="@drawable/cursor_green"
+                android:textSelectHandle="@drawable/text_select_handle_green"
+                android:textSelectHandleLeft="@drawable/text_select_handle_left_green"
+                android:textSelectHandleRight="@drawable/text_select_handle_right_green" />
 
             <View
                 android:layout_width="match_parent"
@@ -197,12 +238,15 @@
     <com.google.android.material.button.MaterialButton
         android:id="@+id/signUpButton"
         android:layout_width="0dp"
-        android:layout_height="56dp"
-        android:layout_marginTop="16dp"
+        android:layout_height="@dimen/button_height"
+        android:layout_marginTop="@dimen/margin_medium"
         android:backgroundTint="#2a8743"
         android:text="Sign Up"
-        android:textSize="16sp"
-        app:cornerRadius="8dp"
+        android:textColor="#FFFFFF"
+        android:textSize="@dimen/body_text_size"
+        android:textStyle="bold"
+        app:cornerRadius="@dimen/input_corner_radius"
+        app:elevation="@dimen/card_elevation"
         app:layout_constraintEnd_toEndOf="@id/endGuide"
         app:layout_constraintStart_toStartOf="@id/startGuide"
         app:layout_constraintTop_toBottomOf="@+id/mainCardContainer" />

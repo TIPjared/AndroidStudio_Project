@@ -1,13 +1,19 @@
 package com.example.finalprojectmobilecomputing;
 
 import android.Manifest;
+import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.location.Location;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.CountDownTimer;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageButton;
@@ -15,11 +21,24 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.android.gms.location.Geofence;
+import com.google.android.gms.location.GeofencingRequest;
+import com.google.android.gms.location.LocationRequest;
+
+import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationResult;
+import com.google.android.gms.maps.model.LatLngBounds;
+import com.google.firebase.Timestamp;
+import com.google.firebase.firestore.GeoPoint;
+import com.google.maps.android.PolyUtil;
+
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.cardview.widget.CardView;
 import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 
@@ -31,6 +50,7 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.PolygonOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.material.navigation.NavigationView;
@@ -44,17 +64,15 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.SetOptions;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
-import retrofit2.Retrofit;
-import retrofit2.converter.gson.GsonConverterFactory;
+import com.google.android.gms.location.GeofencingClient;
+
 
 public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
@@ -62,28 +80,31 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     private GoogleMap mMap;
     private FusedLocationProviderClient fusedLocationClient;
     private LatLng currentLocation;
-
+    private List<LatLng> antelBoundary;
     private DrawerLayout drawerLayout;
     private ImageButton menuButton;
     private NavigationView navigationView;
     private Button payButton;
-    private Button selectRouteButton;
     private Button stopButton;
-    private Button packingAssistantButton;
-
-    private Button changeDestinationButton;
-    private TextView startLocationTextView;
-    private TextView endLocationTextView;
-
+    private GeofencingClient geofencingClient;
     private Map<String, LatLng> predefinedLocations = new HashMap<>();
-    private LatLng selectedEnd;
-    private String selectedEndName;
 
-    private Polyline currentRoute;
     private boolean transactionAuthorized = false;
 
     // Firebase Database reference
     private DatabaseReference rideLogsRef;
+    private TextView distanceTextView, timerTextView, elapsedTimeTextView;;
+    private float totalDistance = 0f;
+    private Location previousLocation;
+    private long startTime;
+    private Handler timerHandler = new Handler();
+    private Runnable timerRunnable;
+    private long rideStartTime;
+    private LocationRequest locationRequest;
+    private LocationCallback locationCallback;
+    private CountDownTimer countDownTimer;
+    private CardView locationCard;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -91,20 +112,22 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         setContentView(R.layout.activity_main_page);
 
         // --- Initialize services & views ---
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
-        drawerLayout = findViewById(R.id.drawerLayout);
-        menuButton = findViewById(R.id.menuButton);
-        navigationView = findViewById(R.id.navigationView);
+        fusedLocationClient     = LocationServices.getFusedLocationProviderClient(this);
+        geofencingClient        = LocationServices.getGeofencingClient(this);
 
+        drawerLayout            = findViewById(R.id.drawerLayout);
+        menuButton              = findViewById(R.id.menuButton);
+        navigationView          = findViewById(R.id.navigationView);
         payButton               = findViewById(R.id.payButton);
-        selectRouteButton       = findViewById(R.id.selectRouteButton);
         stopButton              = findViewById(R.id.stopButton);
-        changeDestinationButton = findViewById(R.id.changeDestinationButton);
+        distanceTextView        = findViewById(R.id.distanceTextView);
+        timerTextView           = findViewById(R.id.timerTextView);
+        startTime               = System.currentTimeMillis();
+        locationCard            = findViewById(R.id.locationCard);
+        elapsedTimeTextView     = findViewById(R.id.elapsedTimeTextView);
 
-        startLocationTextView = findViewById(R.id.startLocationTextView);
-        endLocationTextView   = findViewById(R.id.endLocationTextView);
 
-        packingAssistantButton = findViewById(R.id.PackingAssistantButton);
+        //startTimer();
 
         // XML layout already handles the icon positioning for proper centering
 
@@ -112,9 +135,9 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         rideLogsRef = FirebaseDatabase.getInstance().getReference("rideLogs");
 
         // Initially hide route controls
-        selectRouteButton.setVisibility(View.GONE);
         stopButton.setVisibility(View.GONE);
-        changeDestinationButton.setVisibility(View.GONE);
+
+        locationCard.setVisibility(View.GONE); // Hide at app start
 
         // --- Drawer toggle ---
         menuButton.setOnClickListener(v -> {
@@ -138,6 +161,26 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             return true;
         });
 
+        // Asking for Notifications
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+
+                ActivityCompat.requestPermissions(this,
+                        new String[]{android.Manifest.permission.POST_NOTIFICATIONS},
+                        101); // 101 is the request code
+            }
+        }
+
+        //Location Permissions
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                    Manifest.permission.ACCESS_BACKGROUND_LOCATION
+            }, 1001);
+        }
+
         // Find the header view from the NavigationView
         View headerView = navigationView.getHeaderView(0);
         
@@ -160,49 +203,25 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             });
         }
 
-        // --- Pay / Cancel Transaction flow ---
         payButton.setOnClickListener(v -> {
             if (!transactionAuthorized) {
-                startActivity(new Intent(this, QRScannerActivity.class));
+                // Payment not done yet: go to QR scanner
+                Intent intent = new Intent(MainPage.this, QRScannerActivity.class);
+                startActivity(intent);
+
             } else {
-                confirmCancelTransaction();
+                // Payment already done: this acts like STOP button
+                stopRide();
             }
         });
+
         setupPaymentCallback();
 
-        // --- Route / Stop / Change Destination buttons ---
-        selectRouteButton.setOnClickListener(v -> {
-            if (selectedEnd != null && currentLocation != null) {
-                fetchAndDrawRoute(currentLocation, selectedEnd);
-                stopButton.setVisibility(View.VISIBLE);
-                changeDestinationButton.setVisibility(View.VISIBLE);
-            } else {
-                Toast.makeText(this, "Please select a destination", Toast.LENGTH_SHORT).show();
-            }
-        });
-
         stopButton.setOnClickListener(v -> {
-            if (currentLocation != null && selectedEnd != null && isNearDestination(currentLocation, selectedEnd)) {
-                Toast.makeText(this, "You have arrived at: " + selectedEndName, Toast.LENGTH_LONG).show();
-
-                // Log the ride to Firebase when the ride stops
-                logRideToFirebase();
-
-                resetRoute();
-            } else {
-                Toast.makeText(this, "You are not near your destination yet.", Toast.LENGTH_SHORT).show();
-            }
+            logRideToFirebase();
+            stopRide();
         });
 
-        changeDestinationButton.setOnClickListener(v -> {
-            resetRoute();
-            Toast.makeText(this, "Please select a new destination marker.", Toast.LENGTH_SHORT).show();
-        });
-
-        packingAssistantButton.setOnClickListener(v -> {
-            Intent intent = new Intent(MainPage.this, PackingAssistantActivity.class);
-            startActivity(intent);
-        });
 
         // --- Map fragment init ---
         SupportMapFragment mapFragment =
@@ -211,7 +230,53 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             mapFragment.getMapAsync(this);
         }
     }
-    
+
+
+    private void stopRide() {
+        if (countDownTimer != null) countDownTimer.cancel();
+        if (timerHandler != null && timerRunnable != null) timerHandler.removeCallbacks(timerRunnable);
+
+        transactionAuthorized = false;
+
+        long rideDuration = System.currentTimeMillis() - startTime;
+        int seconds = (int) (rideDuration / 1000);
+        int minutes = seconds / 60;
+        seconds = seconds % 60;
+
+        String time = String.format(Locale.getDefault(), "You rode for %02d:%02d", minutes, seconds);
+        elapsedTimeTextView.setText(time);
+        elapsedTimeTextView.setVisibility(View.VISIBLE);
+
+        distanceTextView.setVisibility(View.VISIBLE); // make sure distance stays visible
+        locationCard.setVisibility(View.VISIBLE);     // keep card visible
+        stopButton.setVisibility(View.GONE);
+        payButton.setVisibility(View.VISIBLE);
+        payButton.setText("Pay Now");
+
+
+        showCompletionDialog();
+        updateTransactionUI();
+        resetRideUI();
+    }
+
+    private void showCompletionDialog() {
+        long elapsedMillis = System.currentTimeMillis() - startTime;
+        int seconds = (int) (elapsedMillis / 1000);
+        int minutes = seconds / 60;
+        seconds = seconds % 60;
+
+        String timeRode = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds);
+        String distance = distanceTextView.getText().toString(); // Already updated
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(MainPage.this);
+        builder.setTitle("Ride Finished");
+        builder.setMessage("Time Rode: " + timeRode + "\nDistance Travelled: " + distance);
+        builder.setPositiveButton("OK", (dialog, which) -> dialog.dismiss());
+        builder.show();
+    }
+
+
+
     // Method to navigate to the Profile activity
     public void goToProfile(View view) {
         Intent intent = new Intent(MainPage.this, Profile.class);
@@ -230,14 +295,18 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     }
 
     private void setupPaymentCallback() {
-        // First check if there's a payment_status extra from PaymentResponseActivity
         String paymentStatus = getIntent().getStringExtra("payment_status");
         if (paymentStatus != null && "success".equals(paymentStatus)) {
             transactionAuthorized = true;
+            CardView locationCard = findViewById(R.id.locationCard);
+            locationCard.setVisibility(View.VISIBLE);
+            timerTextView.setVisibility(View.VISIBLE);
+            startRideTimer();
             updateTransactionUI();
+
             return;
         }
-        
+
         // For backward compatibility, also check the URI data
         Uri data = getIntent().getData();
         if (data != null) {
@@ -247,7 +316,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 if ("success".equals(status)) {
                     transactionAuthorized = true;
                 }
-            } 
+            }
             // Check HTTP scheme from sikad-static.onrender.com
             else if (data.toString().contains("sikad-static.onrender.com")) {
                 String paymentParam = data.getQueryParameter("payment");
@@ -262,52 +331,139 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
     private void updateTransactionUI() {
         if (transactionAuthorized) {
-            payButton.setText("Cancel Transaction");
-            selectRouteButton.setVisibility(View.VISIBLE);
+            payButton.setText("Stop Ride");
+            locationCard.setVisibility(View.VISIBLE);
+            distanceTextView.setVisibility(View.VISIBLE);
+            timerTextView.setVisibility(View.VISIBLE);
+
+            startRideTimer();
+            startLocationUpdates();
+            startTimer();
         } else {
             payButton.setText("Pay Now");
-            selectRouteButton.setVisibility(View.GONE);
             stopButton.setVisibility(View.GONE);
-            changeDestinationButton.setVisibility(View.GONE);
-            resetRoute();
         }
     }
 
-    private void confirmCancelTransaction() {
-        new AlertDialog.Builder(this)
-                .setTitle("Cancel Transaction")
-                .setMessage("Are you sure you want to cancel?")
-                .setPositiveButton("Yes", (d, w) -> {
-                    transactionAuthorized = false;
-                    updateTransactionUI();
-                    Toast.makeText(this, "Transaction cancelled", Toast.LENGTH_SHORT).show();
-                })
-                .setNegativeButton("No", null)
-                .show();
+    private void startTimer() {
+        startTime = System.currentTimeMillis();
+        timerRunnable = new Runnable() {
+            @Override
+            public void run() {
+                long elapsedMillis = System.currentTimeMillis() - startTime;
+                int seconds = (int) (elapsedMillis / 1000);
+                int minutes = seconds / 60;
+                seconds = seconds % 60;
+
+                String time = String.format(Locale.getDefault(), "Elapsed: %02d:%02d", minutes, seconds);
+                elapsedTimeTextView.setText(time);
+
+                timerHandler.postDelayed(this, 1000); // Repeat every second
+            }
+        };
+        timerHandler.post(timerRunnable);
     }
+
+
+    private void startRideTimer() {
+        rideStartTime = System.currentTimeMillis();
+
+        countDownTimer = new CountDownTimer(30 * 60 * 1000, 1000) {
+            public void onTick(long millisUntilFinished) {
+                int seconds = (int) (millisUntilFinished / 1000);
+                int minutes = seconds / 60;
+                seconds = seconds % 60;
+
+                String time = String.format(Locale.getDefault(), "Time Left: %02d:%02d", minutes, seconds);
+                timerTextView.setText(time);
+            }
+
+            public void onFinish() {
+                Toast.makeText(MainPage.this, "Ride time is over!", Toast.LENGTH_SHORT).show();
+                stopRide(); // Automatically stop ride
+            }
+        }.start();
+    }
+
+
+
+    private void stopRideTimer() {
+        if (countDownTimer != null) {
+            countDownTimer.cancel();
+        }
+        long rideDuration = System.currentTimeMillis() - rideStartTime;
+        long minutes = rideDuration / 60000;
+        Toast.makeText(this, "Ride time: " + minutes + " minutes", Toast.LENGTH_SHORT).show();
+    }
+
+    private void resetRideUI() {
+        payButton.setText("Pay Now");
+        payButton.setVisibility(View.VISIBLE);
+        stopButton.setVisibility(View.GONE);
+
+        distanceTextView.setText("");
+        distanceTextView.setVisibility(View.GONE);
+
+        timerTextView.setText("");
+        timerTextView.setVisibility(View.GONE);
+
+        if (elapsedTimeTextView != null) {
+            elapsedTimeTextView.setText("");
+            elapsedTimeTextView.setVisibility(View.GONE);
+        }
+
+        locationCard.setVisibility(View.GONE);
+    }
+
+
+    private void addAndroidGeofence(LatLng center, float radiusMeters) {
+        Geofence geofence = new Geofence.Builder()
+                .setRequestId("antel-geofence")
+                .setCircularRegion(center.latitude, center.longitude, radiusMeters)
+                .setExpirationDuration(Geofence.NEVER_EXPIRE)
+                .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER | Geofence.GEOFENCE_TRANSITION_EXIT)
+                .build();
+
+        GeofencingRequest geofencingRequest = new GeofencingRequest.Builder()
+                .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
+                .addGeofence(geofence)
+                .build();
+
+        PendingIntent geofencePendingIntent = PendingIntent.getBroadcast(
+                this, 0, new Intent(this, GeofenceBroadcastReceiver.class),
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
+        );
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            geofencingClient.addGeofences(geofencingRequest, geofencePendingIntent)
+                    .addOnSuccessListener(aVoid -> Log.d("GEOFENCE", "Geofence added"))
+                    .addOnFailureListener(e -> Log.e("GEOFENCE", "Failed to add geofence", e));
+        }
+    }
+
 
     @Override
     public void onMapReady(GoogleMap googleMap) {
+
         mMap = googleMap;
         requestLocationPermission();
 
-        // Predefine markers
-        addPredefinedMarker("TIP Arlegui",    new LatLng(14.5964, 120.9904)); // Approximate location
-        addPredefinedMarker("City Hall",      new LatLng(14.589793, 120.981617)); // :contentReference[oaicite:0]{index=0}
-        addPredefinedMarker("Rizal Park",     new LatLng(14.5825, 120.9783)); // :contentReference[oaicite:1]{index=1}
-        addPredefinedMarker("Fort Santiago",  new LatLng(14.5950, 120.9694)); // :contentReference[oaicite:2]{index=2}
-        addPredefinedMarker("Cathedral",      new LatLng(14.59147, 120.97356)); // :contentReference[oaicite:3]{index=3}
-        addPredefinedMarker("Museum",         new LatLng(14.5869, 120.9812)); // :contentReference[oaicite:4]{index=4}
-        addPredefinedMarker("Quiapo Church",  new LatLng(14.598782, 120.983783)); // :contentReference[oaicite:5]{index=5}
-        addPredefinedMarker("Jared Near Place",  new LatLng(14.403351, 120.891312)); // :contentReference[oaicite:5]{index=5}
+        // Draw Antel Grand Village geofence
+        listenToGeofenceChanges();
 
 
+        // Remove any "destination" logic (markers are just visual now)
         mMap.setOnMarkerClickListener(marker -> {
-            selectedEnd = marker.getPosition();
-            selectedEndName = marker.getTitle();
-            endLocationTextView.setText("Destination: " + selectedEndName);
+            Toast.makeText(this, "Marker: " + marker.getTitle(), Toast.LENGTH_SHORT).show();
             return false;
+
         });
+        if (antelBoundary != null && !antelBoundary.isEmpty()) {
+            LatLng center = getPolygonCenter(antelBoundary);
+            addAndroidGeofence(center, 100); // Adjust radius as needed
+        } else {
+            Log.e("MapDebug", "antelBoundary is null or empty.");
+        }
     }
 
     private void addPredefinedMarker(String title, LatLng coords) {
@@ -315,6 +471,153 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         predefinedLocations.put(title, coords);
     }
 
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode == 101) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // Permission granted – you can post notifications now
+            } else {
+                Toast.makeText(this, "Notification permission denied", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+    private LatLng getPolygonCenter(List<LatLng> points) {
+        double lat = 0, lng = 0;
+        for (LatLng p : points) {
+            lat += p.latitude;
+            lng += p.longitude;
+        }
+        return new LatLng(lat / points.size(), lng / points.size());
+    }
+    private void listenToGeofenceChanges() {
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
+        DocumentReference docRef = db.collection("geofence").document("antel");
+
+        docRef.addSnapshotListener((snapshot, error) -> {
+            if (error != null) {
+                Log.w("Firestore", "Listen failed.", error);
+                return;
+            }
+
+            if (snapshot != null && snapshot.exists()) {
+                List<Map<String, Object>> points = (List<Map<String, Object>>) snapshot.get("points");
+                if (points != null) {
+                    antelBoundary = new ArrayList<>();
+                    for (Map<String, Object> point : points) {
+                        GeoPoint geoPoint = (GeoPoint) point.get("location");
+                        if (geoPoint != null) {
+                            double lat = geoPoint.getLatitude();
+                            double lng = geoPoint.getLongitude();
+                            antelBoundary.add(new LatLng(lat, lng));
+                        }
+                    }
+
+                    drawGeofencePolygon();
+
+                    // Build geofences for each point (optional, or just one central)
+                    List<Geofence> geofenceList = new ArrayList<>();
+
+                    for (int i = 0; i < antelBoundary.size(); i++) {
+                        LatLng latLng = antelBoundary.get(i);
+                        Geofence geofence = new Geofence.Builder()
+                                .setRequestId("antel-point-" + i)
+                                .setCircularRegion(latLng.latitude, latLng.longitude, 100)
+                                .setExpirationDuration(Geofence.NEVER_EXPIRE)
+                                .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER | Geofence.GEOFENCE_TRANSITION_EXIT)
+                                .build();
+                        geofenceList.add(geofence);
+                    }
+
+                    addMultipleGeofences(geofenceList);
+
+                }
+            } else {
+                Log.d("Firestore", "No current data in geofence document.");
+            }
+        });
+    }
+    private void drawGeofencePolygon() {
+        // Clear previous polygons if needed
+        mMap.clear();
+
+        PolygonOptions polygonOptions = new PolygonOptions()
+                .addAll(antelBoundary)
+                .strokeColor(Color.RED)
+                .fillColor(0x2200FF00)
+                .strokeWidth(5);
+
+        mMap.addPolygon(polygonOptions);
+
+        // Redraw predefined markers (if you cleared map)
+        addPredefinedMarker("Point W1", new LatLng(14.4035, 120.8928));
+        addPredefinedMarker("Point W2", new LatLng(14.4020, 120.8935));
+        addPredefinedMarker("Point W3", new LatLng(14.4015, 120.8920));
+        addPredefinedMarker("Point W4", new LatLng(14.4028, 120.8908));
+        addPredefinedMarker("Point W5", new LatLng(14.4040, 120.8918));
+
+        // Automatically zoom map to show entire geofence
+        LatLngBounds.Builder builder = new LatLngBounds.Builder();
+        for (LatLng point : antelBoundary) {
+            builder.include(point);
+        }
+        LatLngBounds bounds = builder.build();
+        int padding = 100; // offset from edges in pixels
+
+        mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, padding));
+    }
+
+    private void addMultipleGeofences(List<Geofence> geofenceList) {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            Log.e("GEOFENCE", "Missing location permission");
+            return;
+        }
+
+        GeofencingRequest geofencingRequest = new GeofencingRequest.Builder()
+                .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
+                .addGeofences(geofenceList)
+                .build();
+
+        PendingIntent geofencePendingIntent = PendingIntent.getBroadcast(
+                this, 0, new Intent(this, GeofenceBroadcastReceiver.class),
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
+        );
+
+        geofencingClient.addGeofences(geofencingRequest, geofencePendingIntent)
+                .addOnSuccessListener(aVoid -> Log.d("GEOFENCE", "All geofences added"))
+                .addOnFailureListener(e -> Log.e("GEOFENCE", "Failed to add geofences: " + e.getMessage()));
+    }
+
+    // Check if user is inside geofence
+    private void checkGeofence(LatLng currentLocation) {
+        if (!isInsideGeofence(currentLocation)) {
+            Toast.makeText(this, "You are outside the allowed area! Please return.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private boolean isInsideGeofence(LatLng currentLocation) {
+        return PolyUtil.containsLocation(currentLocation, antelBoundary, true);
+    }
+
+    // Geofence check logic (Ray Casting)
+
+    private boolean rayCastIntersect(LatLng point, LatLng vertA, LatLng vertB) {
+        double aY = vertA.latitude;
+        double bY = vertB.latitude;
+        double aX = vertA.longitude;
+        double bX = vertB.longitude;
+        double pY = point.latitude;
+        double pX = point.longitude;
+
+        if ((aY > pY && bY > pY) || (aY < pY && bY < pY) || (aX < pX && bX < pX)) {
+            return false;
+        }
+
+        double m = (bY - aY) / (bX - aX);
+        double x = (pY - aY) / m + aX;
+        return x > pX;
+    }
     private void requestLocationPermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED
@@ -326,6 +629,41 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             );
         } else {
             enableMyLocation();
+        }
+    }
+
+
+
+    //Location Updates
+
+    @SuppressWarnings("deprecation") // Suppress deprecation warning
+    private void startLocationUpdates() {
+        // Use deprecated create() method for backward compatibility
+        locationRequest = LocationRequest.create();
+        locationRequest.setInterval(5000); // Desired interval in milliseconds
+        locationRequest.setFastestInterval(2000); // Fastest acceptable interval
+        locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+
+        locationCallback = new LocationCallback() {
+            @Override
+            public void onLocationResult(LocationResult locationResult) {
+                if (locationResult == null) return;
+
+                Location newLocation = locationResult.getLastLocation();
+                if (previousLocation != null) {
+                    float distance = previousLocation.distanceTo(newLocation);
+                    totalDistance += distance;
+                    distanceTextView.setText(String.format(Locale.getDefault(), "Distance: %.2f m", totalDistance));
+                }
+                previousLocation = newLocation;
+            }
+        };
+
+
+        // Check location permission before requesting updates
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            LocationServices.getFusedLocationProviderClient(this)
+                    .requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper());
         }
     }
 
@@ -342,166 +680,101 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                         currentLocation = new LatLng(loc.getLatitude(), loc.getLongitude());
                         mMap.setMyLocationEnabled(true);
                         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
-                        startLocationTextView.setText(
-                                "You: " + currentLocation.latitude + ", " + currentLocation.longitude
-                        );
                     } else {
                         Toast.makeText(this, "Unable to fetch location", Toast.LENGTH_SHORT).show();
                     }
                 });
     }
 
-    private void fetchAndDrawRoute(LatLng origin, LatLng dest) {
-        Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl("https://maps.googleapis.com/")
-                .addConverterFactory(GsonConverterFactory.create())
-                .build();
 
-        DirectionsAPI api = retrofit.create(DirectionsAPI.class);
-        String o = origin.latitude + "," + origin.longitude;
-        String d = dest.latitude   + "," + dest.longitude;
-        String key = getString(R.string.google_maps_key);
-
-        // Show a loading message
-        Toast.makeText(this, "Fetching route...", Toast.LENGTH_SHORT).show();
-
-        // Request directions with driving mode and alternatives for better results
-        api.getDirections(o, d, "driving", true, key).enqueue(new Callback<DirectionsResponse>() {
-            @Override public void onResponse(
-                    Call<DirectionsResponse> call,
-                    Response<DirectionsResponse> resp
-            ) {
-                if (!resp.isSuccessful() || resp.body() == null) {
-                    Toast.makeText(MainPage.this, "Route API request failed", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                
-                try {
-                    DirectionsResponse result = resp.body();
-                    List<LatLng> routePoints = result.getRoutePoints();
-                    
-                    if (routePoints.isEmpty()) {
-                        Toast.makeText(MainPage.this, "No route found", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-
-                    if (currentRoute != null) currentRoute.remove();
-                    
-                    // Create polyline with better visibility
-                    PolylineOptions options = new PolylineOptions()
-                        .addAll(routePoints)
-                        .color(Color.RED)
-                        .width(10)  // Wider line
-                        .geodesic(true);  // Follow Earth's curvature
-                        
-                    currentRoute = mMap.addPolyline(options);
-                    
-                    // Move camera to show the route
-                    mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(origin, 12));
-                    
-                    // Show route info if available
-                    if (!result.routes.isEmpty() && !result.routes.get(0).legs.isEmpty()) {
-                        DirectionsResponse.Leg leg = result.routes.get(0).legs.get(0);
-                        if (leg.distance != null && leg.duration != null) {
-                            String routeInfo = "Distance: " + leg.distance.text + 
-                                               " | Duration: " + leg.duration.text;
-                            Toast.makeText(MainPage.this, routeInfo, Toast.LENGTH_LONG).show();
-                        }
-                    }
-                } catch (Exception e) {
-                    Toast.makeText(MainPage.this, "Error processing route: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                }
-            }
-
-            @Override public void onFailure(Call<DirectionsResponse> call, Throwable t) {
-                Toast.makeText(MainPage.this, "Error fetching route: " + t.getMessage(), Toast.LENGTH_SHORT).show();
-            }
-        });
-    }
-
-    private boolean isNearDestination(LatLng current, LatLng destination) {
-        float[] results = new float[1];
-        Location.distanceBetween(
-                current.latitude, current.longitude,
-                destination.latitude, destination.longitude, results);
-        return results[0] < 100; // Distance threshold in meters
-    }
-
-    private void resetRoute() {
-        if (currentRoute != null) currentRoute.remove();
-        stopButton.setVisibility(View.GONE);
-        changeDestinationButton.setVisibility(View.GONE);
-    }
 
     private void logRideToFirebase() {
-        String userId = FirebaseAuth.getInstance().getCurrentUser().getUid();
-        long timestamp = System.currentTimeMillis();
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
 
-        // Calculate the distance traveled
-        float[] results = new float[1];
-        Location.distanceBetween(
-                currentLocation.latitude, currentLocation.longitude,
-                selectedEnd.latitude, selectedEnd.longitude,
-                results
-        );
-        float distanceInMeters = results[0];  // distance in meters
+        if (user == null) {
+            Toast.makeText(this, "User not logged in", Toast.LENGTH_SHORT).show();
+            Log.e("RideLog", "User is null - not logged in");
+            return;
+        }
 
-        // Create a map to store the data for ride_logs collection
-        Map<String, Object> rideData = new HashMap<>();
-        rideData.put("distance_traveled", distanceInMeters);
-        rideData.put("location", selectedEndName);
-        rideData.put("timestamp", timestamp);
+        String userId = user.getUid();
+        String email = user.getEmail() != null ? user.getEmail() : "unknown";
+        long rideEndTime = System.currentTimeMillis();
 
-        // Save to the "ride_logs" collection
-        FirebaseFirestore firestore = FirebaseFirestore.getInstance();
-        firestore.collection("ride_logs")
-                .add(rideData)
-                .addOnSuccessListener(documentReference -> {
-                    Toast.makeText(MainPage.this, "Ride logged successfully!", Toast.LENGTH_SHORT).show();
+        // Make sure start time is valid
+        if (rideStartTime == 0 || rideEndTime < rideStartTime) {
+            Toast.makeText(this, "Invalid ride time", Toast.LENGTH_SHORT).show();
+            Log.e("RideLog", "Invalid rideStartTime: " + rideStartTime);
+            return;
+        }
+
+        // Compute duration
+        long rideDurationMillis = rideEndTime - rideStartTime;
+        int rideDurationMinutes = (int) (rideDurationMillis / 60000);
+
+        // Ensure distance is valid
+        if (Double.isNaN(totalDistance) || totalDistance < 0) {
+            totalDistance = 0.0F;
+            Log.w("RideLog", "Distance invalid. Set to 0.");
+        }
+
+        // Timestamps
+        Timestamp start = new Timestamp(new Date(rideStartTime));
+        Timestamp end = new Timestamp(new Date(rideEndTime));
+
+        // Ride log entry
+        Map<String, Object> rideLog = new HashMap<>();
+        rideLog.put("user_id", userId);
+        rideLog.put("user_email", email);
+        rideLog.put("start_time", start);
+        rideLog.put("end_time", end);
+        rideLog.put("duration_minutes", rideDurationMinutes);
+        rideLog.put("distance_traveled", totalDistance);
+        rideLog.put("status", "Completed");
+
+        // Upload to Firestore
+        FirebaseFirestore.getInstance()
+                .collection("ride_logs")
+                .add(rideLog)
+                .addOnSuccessListener(docRef -> {
+                    Log.d("RideLog", "Ride log saved: " + docRef.getId());
+                    Toast.makeText(this, "Ride logged successfully", Toast.LENGTH_SHORT).show();
                 })
-                .addOnFailureListener(e ->
-                        Toast.makeText(MainPage.this, "Error logging ride data", Toast.LENGTH_SHORT).show()
-                );
-
-        // Also log to the original location_logs if needed
-        DatabaseReference locationLogsRef = FirebaseDatabase.getInstance().getReference("location_logs").child("logs").push();
-        Map<String, Object> logData = new HashMap<>();
-        logData.put("distance_traveled", distanceInMeters);
-        logData.put("location", selectedEnd.latitude + "," + selectedEnd.longitude);
-        logData.put("timestamp", timestamp);
-        locationLogsRef.setValue(logData);
+                .addOnFailureListener(e -> {
+                    Log.e("RideLog", "Failed to save ride log", e);
+                    Toast.makeText(this, "Failed to log ride", Toast.LENGTH_LONG).show();
+                });
     }
-    
+
+
+
     private void updateUserStats(String userId, double distanceInKm) {
         FirebaseFirestore firestore = FirebaseFirestore.getInstance();
         DocumentReference userRef = firestore.collection("users").document(userId);
-        
+
         firestore.runTransaction(transaction -> {
             DocumentSnapshot snapshot = transaction.get(userRef);
-            
-            // Get current stats or initialize if not exists
-            String totalRidesStr = snapshot.exists() ? snapshot.getString("totalRides") : "0";
-            String totalDistanceStr = snapshot.exists() ? snapshot.getString("totalDistance") : "0";
-            
-            // Parse current values
+
             int totalRides = 0;
             double totalDistance = 0;
-            try {
-                totalRides = Integer.parseInt(totalRidesStr);
-                totalDistance = Double.parseDouble(totalDistanceStr.replace(" km", ""));
-            } catch (NumberFormatException e) {
-                // Use defaults if parsing fails
+
+            if (snapshot.exists()) {
+                String totalRidesStr = snapshot.getString("totalRides");
+                String totalDistanceStr = snapshot.getString("totalDistance");
+
+                try {
+                    totalRides = totalRidesStr != null ? Integer.parseInt(totalRidesStr) : 0;
+                    totalDistance = totalDistanceStr != null ? Double.parseDouble(totalDistanceStr.replace(" km", "")) : 0;
+                } catch (NumberFormatException ignored) {}
             }
-            
-            // Update with new ride
+
             totalRides++;
             totalDistance += distanceInKm;
-            
-            // Format and save
+
             Map<String, Object> updates = new HashMap<>();
             updates.put("totalRides", String.valueOf(totalRides));
             updates.put("totalDistance", String.format(Locale.getDefault(), "%.1f km", totalDistance));
-            
+
             transaction.set(userRef, updates, SetOptions.merge());
             return null;
         });

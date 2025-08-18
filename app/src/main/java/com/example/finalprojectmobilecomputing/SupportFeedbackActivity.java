@@ -189,20 +189,20 @@ public class SupportFeedbackActivity extends AppCompatActivity {
         
         private void openFaqWebpage() {
             Intent intent = new Intent(Intent.ACTION_VIEW);
-            intent.setData(Uri.parse("https://example.com/pedalgo/faq"));
+            intent.setData(Uri.parse("https://example.com/sikad/faq"));
             startActivity(intent);
         }
         
         private void emailSupportTeam() {
             Intent intent = new Intent(Intent.ACTION_SENDTO);
-            intent.setData(Uri.parse("mailto:support@pedalgo.com"));
-            intent.putExtra(Intent.EXTRA_SUBJECT, "PedalGo App Support Request");
+            intent.setData(Uri.parse("mailto:support@sikad.com"));
+            intent.putExtra(Intent.EXTRA_SUBJECT, "Sikad App Support Request");
             startActivity(Intent.createChooser(intent, "Send Email"));
         }
         
         private void openHelpCenterWebpage() {
             Intent intent = new Intent(Intent.ACTION_VIEW);
-            intent.setData(Uri.parse("https://example.com/pedalgo/help"));
+            intent.setData(Uri.parse("https://example.com/sikad/help"));
             startActivity(intent);
         }
     }

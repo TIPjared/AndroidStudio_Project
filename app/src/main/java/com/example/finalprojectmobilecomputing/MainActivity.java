@@ -16,6 +16,9 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
+import android.os.Handler;
 
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
@@ -24,6 +27,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.tasks.Task;
 import com.google.android.material.textfield.TextInputEditText;
+import android.widget.EditText;
 import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -32,7 +36,8 @@ import com.google.firebase.auth.GoogleAuthProvider;
 public class MainActivity extends AppCompatActivity {
 
     private FirebaseAuth mAuth;
-    private TextInputEditText emailField, passwordField;
+    private EditText emailField;
+    private TextInputEditText passwordField;
     private Button loginButton;
     private TextView goToSignup, forgotPasswordLink;
     private static final int RC_SIGN_IN = 123;
@@ -50,6 +55,9 @@ public class MainActivity extends AppCompatActivity {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
+
+        // Start animations
+        startLoginAnimations();
 
         mAuth = FirebaseAuth.getInstance();
 
@@ -77,13 +85,23 @@ public class MainActivity extends AppCompatActivity {
 
         mGoogleSignInClient = GoogleSignIn.getClient(this, gso);
 
-        // Set click listeners
-        googleSignInButton.setOnClickListener(view -> signInWithGoogle());
-        loginButton.setOnClickListener(view -> loginWithEmail());
+        // Set click listeners with animations
+        googleSignInButton.setOnClickListener(view -> {
+            animateButton(googleSignInButton);
+            new Handler().postDelayed(() -> signInWithGoogle(), 100);
+        });
+        loginButton.setOnClickListener(view -> {
+            animateButton(loginButton);
+            new Handler().postDelayed(() -> loginWithEmail(), 100);
+        });
         
         goToSignup.setOnClickListener(view -> {
-            Intent intent = new Intent(MainActivity.this, SignUpActivity.class);
-            startActivity(intent);
+            animateButton(goToSignup);
+            new Handler().postDelayed(() -> {
+                Intent intent = new Intent(MainActivity.this, SignUpActivity.class);
+                startActivity(intent);
+                overridePendingTransition(R.anim.activity_slide_in_right, R.anim.activity_slide_out_left);
+            }, 100);
         });
         
         // Add forgot password link functionality
@@ -91,6 +109,41 @@ public class MainActivity extends AppCompatActivity {
             Intent intent = new Intent(MainActivity.this, ForgotPasswordActivity.class);
             startActivity(intent);
         });
+    }
+
+    private void startLoginAnimations() {
+        // Animate welcome text
+        TextView welcomeText = findViewById(R.id.textView3);
+        TextView signInText = findViewById(R.id.textView4);
+        
+        Animation fadeIn = AnimationUtils.loadAnimation(this, R.anim.fade_in);
+        Animation slideInLeft = AnimationUtils.loadAnimation(this, R.anim.slide_in_left);
+        Animation slideUp = AnimationUtils.loadAnimation(this, R.anim.slide_up);
+        Animation bounceIn = AnimationUtils.loadAnimation(this, R.anim.bounce_in);
+        
+        // Stagger animations
+        welcomeText.startAnimation(fadeIn);
+        
+        new Handler().postDelayed(() -> {
+            signInText.startAnimation(slideInLeft);
+        }, 200);
+        
+        new Handler().postDelayed(() -> {
+            findViewById(R.id.loginFormContainer).startAnimation(slideUp);
+        }, 400);
+        
+        new Handler().postDelayed(() -> {
+            loginButton.startAnimation(bounceIn);
+        }, 700);
+        
+        new Handler().postDelayed(() -> {
+            findViewById(R.id.googleSignInContainer).startAnimation(bounceIn);
+        }, 800);
+    }
+    
+    private void animateButton(View button) {
+        Animation buttonPress = AnimationUtils.loadAnimation(this, R.anim.button_press);
+        button.startAnimation(buttonPress);
     }
 
     private void loginWithEmail() {

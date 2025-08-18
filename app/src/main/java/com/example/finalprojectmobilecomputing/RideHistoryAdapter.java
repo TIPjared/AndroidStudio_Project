@@ -107,7 +107,7 @@ public class RideHistoryAdapter extends RecyclerView.Adapter<RideHistoryAdapter.
             String shareText = "I completed a ride of " + 
                     String.format(Locale.getDefault(), "%.1f km", ride.getDistance()) + 
                     " in " + String.format(Locale.getDefault(), "%d minutes", ride.getDuration()) + 
-                    " with the PedalGo App!";
+                    " with the Sikad App!";
             
             // Always include the actual location name, which is now correctly set in the ride object
             shareText += "\nRoute: " + (ride.getLocation() != null ? ride.getLocation() : getDefaultLocationName());

@@ -298,7 +298,7 @@ public class RideDetailsActivity extends AppCompatActivity implements OnMapReady
         String shareText = "I completed a ride of " + 
                 String.format(Locale.getDefault(), "%.1f km", currentRide.getDistance()) + 
                 " in " + String.format(Locale.getDefault(), "%d minutes", currentRide.getDuration()) + 
-                " with the PedalGo App!";
+                " with the Sikad App!";
         
         // Always include the route name
         shareText += "\nRoute: " + locationName;
@@ -310,7 +310,7 @@ public class RideDetailsActivity extends AppCompatActivity implements OnMapReady
         
         Intent shareIntent = new Intent(Intent.ACTION_SEND);
         shareIntent.setType("text/plain");
-        shareIntent.putExtra(Intent.EXTRA_SUBJECT, "My PedalGo Journey");
+        shareIntent.putExtra(Intent.EXTRA_SUBJECT, "My Sikad Journey");
         shareIntent.putExtra(Intent.EXTRA_TEXT, shareText);
         startActivity(Intent.createChooser(shareIntent, "Share your ride"));
     }
@@ -329,7 +329,7 @@ public class RideDetailsActivity extends AppCompatActivity implements OnMapReady
         Toast.makeText(this, "Ride data exported (CSV file would be saved in a real app)", Toast.LENGTH_SHORT).show();
         
         // Example of data that would be exported
-        String exportData = "PedalGo Ride ID: " + currentRide.getId() + "\n" +
+        String exportData = "Sikad Ride ID: " + currentRide.getId() + "\n" +
                 "Date: " + (currentRide.getTimestamp() != null ? DATE_FORMAT.format(currentRide.getTimestamp()) : "Unknown") + "\n" +
                 "Time: " + (currentRide.getTimestamp() != null ? TIME_FORMAT.format(currentRide.getTimestamp()) : "00:00") + "\n" +
                 "Route: " + locationName + "\n" +

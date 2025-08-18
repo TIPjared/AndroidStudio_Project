@@ -2,7 +2,15 @@
     <!-- Base application theme. -->
     <style name="Base.Theme.FinalProjectMobileComputing" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+        <item name="colorPrimary">@color/sikad_green</item>
+        <item name="colorPrimaryVariant">@color/sikad_green_dark</item>
+        <item name="colorAccent">@color/sikad_green_light</item>
+        <item name="colorControlActivated">@color/sikad_green</item>
+        <item name="colorControlHighlight">@color/sikad_green_light</item>
+        <item name="android:textCursorDrawable">@drawable/cursor_green</item>
+        <item name="android:textSelectHandle">@drawable/text_select_handle_green</item>
+        <item name="android:textSelectHandleLeft">@drawable/text_select_handle_left_green</item>
+        <item name="android:textSelectHandleRight">@drawable/text_select_handle_right_green</item>
     </style>
 
     <style name="Theme.FinalProjectMobileComputing" parent="Base.Theme.FinalProjectMobileComputing" />
