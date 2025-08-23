@@ -2,6 +2,7 @@ package com.example.finalprojectmobilecomputing;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -24,6 +25,9 @@ import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.firebase.firestore.FirebaseFirestore;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class SignUpActivity extends AppCompatActivity {
 
@@ -148,15 +152,26 @@ public class SignUpActivity extends AppCompatActivity {
                                         if (task.isSuccessful()) {
                                             String userId = mAuth.getCurrentUser().getUid();
 
-                                            db.collection("users").document(userId).set(new UserModel(email, phone))
+                                            String deviceId = Settings.Secure.getString(
+                                                    getContentResolver(), Settings.Secure.ANDROID_ID);
+
+                                            Map<String, Object> newUser = new HashMap<>();
+                                            newUser.put("email", email);
+                                            newUser.put("phone", phone);
+                                            newUser.put("deviceId", null);
+                                            newUser.put("phoneVerified", false);
+
+                                            db.collection("users").document(userId)
+                                                    .set(newUser)
                                                     .addOnSuccessListener(aVoid -> {
                                                         Toast.makeText(SignUpActivity.this, "Account created! Please log in.", Toast.LENGTH_SHORT).show();
                                                         startActivity(new Intent(SignUpActivity.this, MainActivity.class));
                                                         finish();
                                                     })
                                                     .addOnFailureListener(e -> {
-                                                        Toast.makeText(SignUpActivity.this, "Failed to save phone: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                                                        Toast.makeText(SignUpActivity.this, "Failed to save user: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                                                     });
+
                                         } else {
                                             Toast.makeText(SignUpActivity.this, "Sign up failed: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
                                         }

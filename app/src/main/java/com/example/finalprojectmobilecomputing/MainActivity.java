@@ -2,6 +2,7 @@ package com.example.finalprojectmobilecomputing;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.text.InputType;
 import android.view.View;
 import android.widget.Button;
@@ -32,6 +33,10 @@ import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
+import com.google.firebase.firestore.FirebaseFirestore;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -68,14 +73,6 @@ public class MainActivity extends AppCompatActivity {
         googleSignInButton = findViewById(R.id.googleSignInButton);
         goToSignup = findViewById(R.id.goToSignup);
         forgotPasswordLink = findViewById(R.id.forgotPasswordLink);
-
-        // Check if already logged in
-        FirebaseUser currentUser = mAuth.getCurrentUser();
-        if (currentUser != null) {
-            Intent intent = new Intent(MainActivity.this, MainPage.class); // or OTPVerificationActivity
-            startActivity(intent);
-            finish();
-        }
 
         // Google Sign-In setup
         GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -166,19 +163,59 @@ public class MainActivity extends AppCompatActivity {
                 .addOnCompleteListener(this, task -> {
                     if (task.isSuccessful()) {
                         FirebaseUser user = mAuth.getCurrentUser();
-                        Intent intent = new Intent(MainActivity.this, OTPVerification.class);
-                        intent.putExtra("phoneNumber", user.getPhoneNumber()); // if available
-                        startActivity(intent);
-
-                        //BYPASS OTP (TEMPORARY)
-                        //Intent intent = new Intent(MainActivity.this, MainPage.class);
-                        //startActivity(intent);
-                        finish();
+                        if (user != null) {
+                            checkOTPRequirement(user.getUid());
+                        }
                     } else {
-                        Toast.makeText(MainActivity.this, "Login failed: " + task.getException().getMessage(), Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MainActivity.this,
+                                "Login failed: " + task.getException().getMessage(),
+                                Toast.LENGTH_SHORT).show();
                     }
                 });
     }
+
+    private void checkOTPRequirement(String userId) {
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
+        db.collection("users").document(userId)
+                .get()
+                .addOnSuccessListener(document -> {
+                    if (document.exists()) {
+                        Boolean phoneVerified = document.getBoolean("phoneVerified");
+                        String savedDeviceId = document.getString("deviceId");
+
+                        String currentDeviceId = Settings.Secure.getString(
+                                getContentResolver(), Settings.Secure.ANDROID_ID);
+
+                        if (phoneVerified != null && phoneVerified &&
+                                savedDeviceId != null && savedDeviceId.equals(currentDeviceId)) {
+                            // ✅ Already verified on this device → go straight to MainPage
+                            startActivity(new Intent(MainActivity.this, MainPage.class));
+                            finish();
+                        } else {
+                            // ❌ Either first login, not verified, or using a new device → OTP
+                            startActivity(new Intent(MainActivity.this, OTPVerification.class));
+                            finish();
+                        }
+                    } else {
+                        // 🚨 First time login → create record and force OTP
+                        FirebaseUser user = mAuth.getCurrentUser();
+                        if (user != null) {
+                            Map<String, Object> newUser = new HashMap<>();
+                            newUser.put("phoneVerified", false);
+                            newUser.put("deviceId", null);
+                            db.collection("users").document(userId).set(newUser);
+                        }
+
+                        startActivity(new Intent(MainActivity.this, OTPVerification.class));
+                        finish();
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    Toast.makeText(MainActivity.this, "Error fetching user data", Toast.LENGTH_SHORT).show();
+                });
+    }
+
+
 
     private void signInWithGoogle() {
         Intent signInIntent = mGoogleSignInClient.getSignInIntent();
@@ -206,13 +243,19 @@ public class MainActivity extends AppCompatActivity {
                 .addOnCompleteListener(this, task -> {
                     if (task.isSuccessful()) {
                         FirebaseUser user = mAuth.getCurrentUser();
-                        Intent intent = new Intent(MainActivity.this, OTPVerification.class);
-                        intent.putExtra("phoneNumber", user.getPhoneNumber()); // if available
-                        startActivity(intent);
-                        finish();
+                        if (user != null) {
+                            // ✅ Skip OTP for Google Sign-In
+                            Intent intent = new Intent(MainActivity.this, MainPage.class);
+                            startActivity(intent);
+                            finish();
+                        }
                     } else {
-                        Toast.makeText(MainActivity.this, "Firebase Google Sign-In failed: " + task.getException().getMessage(), Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MainActivity.this,
+                                "Firebase Google Sign-In failed: " +
+                                        (task.getException() != null ? task.getException().getMessage() : "Unknown error"),
+                                Toast.LENGTH_SHORT).show();
                     }
                 });
     }
 }
+

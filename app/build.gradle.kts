@@ -7,6 +7,16 @@ android {
     namespace = "com.example.finalprojectmobilecomputing"
     compileSdk = 35
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("C:/Users/johnj/keystores/Sikad-release.jks")
+            storePassword = "Sikadpassword!"
+            keyAlias = "Sikad-key-alias"
+            keyPassword = "Sikadpassword!"
+            storeType = "JKS"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.example.finalprojectmobilecomputing"
         minSdk = 24
@@ -20,7 +30,8 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
-            proguardFiles(
+            signingConfig = signingConfigs.getByName("release")
+                    proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
@@ -30,6 +41,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
 }
 configurations.all {
     resolutionStrategy {
