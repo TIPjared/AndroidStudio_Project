@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.CountDownTimer;
+import android.provider.Settings;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -287,34 +288,39 @@ public class OTPVerification extends AppCompatActivity {
     }
 
     // ✅ Sign in with OTP credential
+    // ✅ Verify OTP credential without re-authenticating user
     private void signInWithPhoneAuthCredential(PhoneAuthCredential credential) {
-        mAuth.signInWithCredential(credential)
-                .addOnCompleteListener(this, new OnCompleteListener<AuthResult>() {
-                    @Override
-                    public void onComplete(@NonNull Task<AuthResult> task) {
-                        if (task.isSuccessful()) {
-                            isVerified = true;
-                            Toast.makeText(OTPVerification.this, "Verification successful!", Toast.LENGTH_SHORT).show();
-                            
-                            // Save verification status to user's profile
-                            FirebaseUser user = task.getResult().getUser();
-                            if (user != null) {
-                                db.collection("users").document(user.getUid())
-                                    .update("phoneVerified", true)
-                                    .addOnSuccessListener(aVoid -> {
-                                        // Continue to MainPage after successful verification
-                                        startActivity(new Intent(OTPVerification.this, MainPage.class));
-                                        finish();
-                                    });
-                            }
+        FirebaseUser currentUser = mAuth.getCurrentUser();
+        if (currentUser == null) {
+            Toast.makeText(this, "User not logged in", Toast.LENGTH_SHORT).show();
+            startActivity(new Intent(OTPVerification.this, MainActivity.class));
+            finish();
+            return;
+        }
+
+        // Just link the credential instead of re-sign-in
+        currentUser.updatePhoneNumber(credential)
+                .addOnCompleteListener(task -> {
+                    if (task.isSuccessful()) {
+                        Toast.makeText(OTPVerification.this, "Verification successful!", Toast.LENGTH_SHORT).show();
+
+                        // Update Firestore record
+                        db.collection("users").document(currentUser.getUid())
+                                .update(
+                                        "phoneVerified", true,
+                                        "deviceId", Settings.Secure.getString(
+                                                getContentResolver(), Settings.Secure.ANDROID_ID)
+                                )
+                                .addOnSuccessListener(aVoid -> {
+                                    startActivity(new Intent(OTPVerification.this, MainPage.class));
+                                    finish();
+                                });
+                    } else {
+                        if (task.getException() instanceof FirebaseAuthInvalidCredentialsException) {
+                            Toast.makeText(OTPVerification.this, "Invalid verification code", Toast.LENGTH_SHORT).show();
                         } else {
-                            // Verification failed
-                            if (task.getException() instanceof FirebaseAuthInvalidCredentialsException) {
-                                Toast.makeText(OTPVerification.this, "Invalid verification code", Toast.LENGTH_SHORT).show();
-                            } else {
-                                Toast.makeText(OTPVerification.this, "Verification failed: " + task.getException().getMessage(), 
+                            Toast.makeText(OTPVerification.this, "Verification failed: " + task.getException().getMessage(),
                                     Toast.LENGTH_SHORT).show();
-                            }
                         }
                     }
                 });
@@ -336,3 +342,4 @@ public class OTPVerification extends AppCompatActivity {
         super.onDestroy();
     }
 }
+

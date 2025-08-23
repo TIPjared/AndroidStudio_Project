@@ -215,7 +215,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                             antelBoundary,
                             true
                     )) {
-                        Intent intent = new Intent(MainPage.this, PaymentActivity.class);
+                        Intent intent = new Intent(MainPage.this, QRScannerActivity.class);
                         startActivity(intent);
                     } else {
                         Toast.makeText(this, "You must be inside Antel Grand Village to start a ride.", Toast.LENGTH_SHORT).show();
