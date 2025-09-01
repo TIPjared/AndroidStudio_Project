@@ -24,7 +24,7 @@
     </style>
     
     <!-- Custom TextInput Style with Green Theme -->
-    <style name="SikadTextInputStyle" parent="Widget.MaterialComponents.TextInputLayout.FilledBox">
+    <style name="SikadTextInputStyle" parent="Widget.MaterialComponents.TextInputLayout.OutlinedBox">
         <item name="colorPrimary">@color/sikad_green</item>
         <item name="colorPrimaryVariant">@color/sikad_green_dark</item>
         <item name="colorOnSurface">@color/sikad_green</item>
@@ -34,6 +34,8 @@
         <item name="hintTextColor">@color/sikad_green</item>
         <item name="boxStrokeColor">@color/sikad_green</item>
         <item name="endIconTint">@color/sikad_green</item>
+        <item name="boxBackgroundColor">@android:color/white</item>
+        <item name="android:textColor">@android:color/black</item>
     </style>
     
     <!-- Custom EditText Style with Green Theme -->
