@@ -1,3 +1,4 @@
+
 package com.example.finalprojectmobilecomputing;
 
 import android.content.Intent;
@@ -37,6 +38,7 @@ public class OTPVerification extends AppCompatActivity {
     private FirebaseAuth mAuth;
     private FirebaseFirestore db;
     private String phoneNumber;
+    private String userId;
     private CountDownTimer resendTimer;
 
     // Constants for rate limiting
@@ -73,7 +75,12 @@ public class OTPVerification extends AppCompatActivity {
             return;
         }
         phoneNumber = getIntent().getStringExtra("phone");
-        String userId = currentUser.getUid();
+        userId = getIntent().getStringExtra("userId");
+        
+        // If userId is not provided, get it from current user
+        if (userId == null || userId.isEmpty()) {
+            userId = currentUser.getUid();
+        }
 
         if (phoneNumber == null || phoneNumber.isEmpty()) {
             Toast.makeText(this, "Phone number missing, please login again", Toast.LENGTH_SHORT).show();
@@ -106,6 +113,8 @@ public class OTPVerification extends AppCompatActivity {
         });
     }
 
+
+
     private String normalizePhone(String raw) {
         if (raw == null) return "";
         String digits = raw.replaceAll("[^0-9+]", "");
@@ -127,7 +136,7 @@ public class OTPVerification extends AppCompatActivity {
         String phone = normalizePhone(phoneFromDb);
 
         OkHttpClient client = new OkHttpClient();
-        String url = "https://twiliootp-0ov5.onrender.com/otp/start";
+        String url = "https://sikad-otp-server.onrender.com/otp/start";
 
         String json = "{ \"phone\": \"" + phone + "\" }";
         RequestBody body = RequestBody.create(
@@ -177,7 +186,7 @@ public class OTPVerification extends AppCompatActivity {
             String idToken = result.getToken();
 
             OkHttpClient client = new OkHttpClient();
-            String url = "https://twiliootp-0ov5.onrender.com/otp/check";
+            String url = "https://sikad-otp-server.onrender.com/otp/check";
 
             String json = "{ \"phone\": \"" + phone + "\", \"code\": \"" + code + "\" }";
             Request request = new Request.Builder()

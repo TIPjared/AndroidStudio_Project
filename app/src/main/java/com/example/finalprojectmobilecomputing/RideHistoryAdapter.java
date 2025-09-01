@@ -21,7 +21,7 @@ public class RideHistoryAdapter extends RecyclerView.Adapter<RideHistoryAdapter.
 
     private final List<RideHistory> ridesList;
     private final Context context;
-    private static final SimpleDateFormat TIME_FORMAT = new SimpleDateFormat("HH:mm", Locale.getDefault());
+    private static final SimpleDateFormat TIME_FORMAT = new SimpleDateFormat("hh:mm a", Locale.getDefault());
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("dd MMM yyyy", Locale.getDefault());
 
     public RideHistoryAdapter(Context context, List<RideHistory> ridesList) {
@@ -40,44 +40,15 @@ public class RideHistoryAdapter extends RecyclerView.Adapter<RideHistoryAdapter.
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         RideHistory ride = ridesList.get(position);
         
-        // Set ride data
-        if (ride.getLocation() != null && !ride.getLocation().isEmpty()) {
-            // Check if the location is in format "lat,lng"
-            if (ride.getLocation().matches("^[-+]?\\d+\\.\\d+,\\s*[-+]?\\d+\\.\\d+$")) {
-                // Parse the coordinates and find the nearest predefined location
-                String[] latLng = ride.getLocation().split(",");
-                if (latLng.length == 2) {
-                    try {
-                        double lat = Double.parseDouble(latLng[0].trim());
-                        double lng = Double.parseDouble(latLng[1].trim());
-                        LatLng coordinates = new LatLng(lat, lng);
-                        // Find the nearest location
-                        String locationName = getNameFromLocation(coordinates);
-                        holder.locationText.setText(locationName);
-                        // Update the ride object's location for use in share function
-                        ride.setLocation(locationName);
-                    } catch (NumberFormatException e) {
-                        holder.locationText.setText(getDefaultLocationName());
-                    }
-                } else {
-                    holder.locationText.setText(getDefaultLocationName());
-                }
-            } else {
-                // It's already a named location
-                holder.locationText.setText(ride.getLocation());
-            }
-        } else {
-            holder.locationText.setText(getDefaultLocationName());
-        }
+        // Set ride data - Always show Antel Grand Village
+        holder.locationText.setText("Antel Grand Village");
+        ride.setLocation("Antel Grand Village");
         
         holder.distanceText.setText(String.format(Locale.getDefault(), "%.1f km", ride.getDistance()));
         holder.durationText.setText(String.format(Locale.getDefault(), "%d min", ride.getDuration()));
         
-        if (ride.getTimestamp() != null) {
-            holder.timestampText.setText(TIME_FORMAT.format(ride.getTimestamp()));
-        } else {
-            holder.timestampText.setText("00:00");
-        }
+        // Display cost
+        holder.costText.setText(String.format(Locale.getDefault(), "₱%.0f", ride.getCost()));
         
         // Set date label (Today or actual date)
         if (isToday(ride.getTimestamp())) {
@@ -100,27 +71,6 @@ public class RideHistoryAdapter extends RecyclerView.Adapter<RideHistoryAdapter.
             Intent intent = new Intent(context, RideDetailsActivity.class);
             intent.putExtra("RIDE_ID", ride.getId());
             context.startActivity(intent);
-        });
-        
-        holder.shareButton.setOnClickListener(v -> {
-            // Share ride details
-            String shareText = "I completed a ride of " + 
-                    String.format(Locale.getDefault(), "%.1f km", ride.getDistance()) + 
-                    " in " + String.format(Locale.getDefault(), "%d minutes", ride.getDuration()) + 
-                    " with the Sikad App!";
-            
-            // Always include the actual location name, which is now correctly set in the ride object
-            shareText += "\nRoute: " + (ride.getLocation() != null ? ride.getLocation() : getDefaultLocationName());
-            
-            // Add date
-            if (ride.getTimestamp() != null) {
-                shareText += "\nDate: " + DATE_FORMAT.format(ride.getTimestamp());
-            }
-            
-            Intent shareIntent = new Intent(Intent.ACTION_SEND);
-            shareIntent.setType("text/plain");
-            shareIntent.putExtra(Intent.EXTRA_TEXT, shareText);
-            context.startActivity(Intent.createChooser(shareIntent, "Share your ride"));
         });
     }
 
@@ -148,38 +98,18 @@ public class RideHistoryAdapter extends RecyclerView.Adapter<RideHistoryAdapter.
     
     // Helper method to get the name of a location from coordinates
     private String getNameFromLocation(LatLng location) {
-        // Define all predefined locations
-        final LatLng RIZAL_PARK = new LatLng(14.5825, 120.9783);
-        final LatLng FORT_SANTIAGO = new LatLng(14.5950, 120.9694);
-        final LatLng CITY_HALL = new LatLng(14.589793, 120.981617);
-        final LatLng CATHEDRAL = new LatLng(14.59147, 120.97356);
-        final LatLng MUSEUM = new LatLng(14.5869, 120.9812);
-        final LatLng QUIAPO_CHURCH = new LatLng(14.598782, 120.983783);
-        final LatLng TIP_ARLEGUI = new LatLng(14.5964, 120.9904);
+        // Define Antel Grand Village location and geofence
+        final LatLng ANTEL_GRAND_VILLAGE = new LatLng(14.5964, 120.9904); // Main entrance coordinates
         
-        // Calculate distance to each location
-        double distToRizal = computeDistance(location, RIZAL_PARK);
-        double distToFort = computeDistance(location, FORT_SANTIAGO);
-        double distToCity = computeDistance(location, CITY_HALL);
-        double distToCathedral = computeDistance(location, CATHEDRAL);
-        double distToMuseum = computeDistance(location, MUSEUM);
-        double distToQuiapo = computeDistance(location, QUIAPO_CHURCH);
-        double distToTIP = computeDistance(location, TIP_ARLEGUI);
+        // Calculate distance to Antel Grand Village
+        double distToAntel = computeDistance(location, ANTEL_GRAND_VILLAGE);
         
-        // Find the closest location
-        double minDist = Math.min(Math.min(Math.min(distToRizal, distToFort), 
-                Math.min(distToCity, distToCathedral)), 
-                Math.min(Math.min(distToMuseum, distToQuiapo), distToTIP));
+        // If within 500 meters of Antel Grand Village, consider it as Antel Grand Village
+        if (distToAntel <= 0.005) { // Approximately 500 meters in degrees
+            return "Antel Grand Village";
+        }
         
-        if (minDist == distToRizal) return "Rizal Park";
-        if (minDist == distToFort) return "Fort Santiago";
-        if (minDist == distToCity) return "City Hall";
-        if (minDist == distToCathedral) return "Cathedral";
-        if (minDist == distToMuseum) return "Museum";
-        if (minDist == distToQuiapo) return "Quiapo Church";
-        if (minDist == distToTIP) return "TIP Arlegui";
-        
-        // Default fallback
+        // Default fallback - all rides are considered within Antel Grand Village
         return getDefaultLocationName();
     }
     
@@ -192,12 +122,12 @@ public class RideHistoryAdapter extends RecyclerView.Adapter<RideHistoryAdapter.
     
     // Return the default location name
     private String getDefaultLocationName() {
-        return "TIP Arlegui";
+        return "Antel Grand Village";
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
-        TextView dateLabel, locationText, distanceText, durationText, timestampText, statusText;
-        TextView viewDetailsButton, shareButton;
+        TextView dateLabel, locationText, distanceText, durationText, costText, statusText;
+        TextView viewDetailsButton;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -206,10 +136,9 @@ public class RideHistoryAdapter extends RecyclerView.Adapter<RideHistoryAdapter.
             locationText = itemView.findViewById(R.id.locationText);
             distanceText = itemView.findViewById(R.id.distanceText);
             durationText = itemView.findViewById(R.id.durationText);
-            timestampText = itemView.findViewById(R.id.timestampText);
+            costText = itemView.findViewById(R.id.costText);
             statusText = itemView.findViewById(R.id.statusText);
             viewDetailsButton = itemView.findViewById(R.id.viewDetailsButton);
-            shareButton = itemView.findViewById(R.id.shareButton);
         }
     }
 } 

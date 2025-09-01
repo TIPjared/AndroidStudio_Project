@@ -10,12 +10,13 @@ public class RideHistory {
     private Date timestamp;
     private String status;
     private String userId;
+    private double cost;
 
     // Empty constructor needed for Firestore
     public RideHistory() {
     }
 
-    public RideHistory(String id, String location, double distance, int duration, Date timestamp, String status, String userId) {
+    public RideHistory(String id, String location, double distance, int duration, Date timestamp, String status, String userId, double cost) {
         this.id = id;
         this.location = location;
         this.distance = distance;
@@ -23,6 +24,7 @@ public class RideHistory {
         this.timestamp = timestamp;
         this.status = status;
         this.userId = userId;
+        this.cost = cost;
     }
 
     // Getters and setters
@@ -80,5 +82,13 @@ public class RideHistory {
 
     public void setUserId(String userId) {
         this.userId = userId;
+    }
+    
+    public double getCost() {
+        return cost;
+    }
+
+    public void setCost(double cost) {
+        this.cost = cost;
     }
 } 

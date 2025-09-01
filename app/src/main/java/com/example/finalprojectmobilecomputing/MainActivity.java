@@ -239,7 +239,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         OkHttpClient client = new OkHttpClient();
-        String url = "https://twiliootp-0ov5.onrender.com/otp/start";
+        String url = "https://sikad-otp-server.onrender.com/otp/start";
 
         // JSON payload
         String json = "{ \"phone\": \"" + phoneNumber + "\" }";
@@ -254,12 +254,14 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFailure(Call call, IOException e) {
                 runOnUiThread(() ->
-                        Toast.makeText(MainActivity.this, "Failed to send OTP", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(MainActivity.this, "Failed to send OTP. Please check your internet connection.", Toast.LENGTH_SHORT).show()
                 );
             }
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
+                String responseBody = response.body() != null ? response.body().string() : "";
+                
                 if (response.isSuccessful()) {
                     runOnUiThread(() -> {
                         Intent intent = new Intent(MainActivity.this, OTPVerification.class);
@@ -269,12 +271,35 @@ public class MainActivity extends AppCompatActivity {
                         finish();
                     });
                 } else {
-                    runOnUiThread(() ->
-                            Toast.makeText(MainActivity.this, "OTP request failed", Toast.LENGTH_SHORT).show()
-                    );
+                    runOnUiThread(() -> {
+                        // Handle specific Twilio trial account error
+                        if (response.code() == 403 && responseBody.contains("unverified")) {
+                            showTrialAccountError(phoneNumber, userId);
+                        } else {
+                            Toast.makeText(MainActivity.this, "OTP request failed: " + response.message(), Toast.LENGTH_SHORT).show();
+                        }
+                    });
                 }
             }
         });
+    }
+
+    private void showTrialAccountError(String phoneNumber, String userId) {
+        // Show a dialog explaining the trial account limitation and how to fix it
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Phone Number Verification Required")
+                .setMessage("Your phone number (" + phoneNumber + ") needs to be verified with Twilio to receive SMS.\n\n" +
+                           "To fix this:\n" +
+                           "1. Go to twilio.com/user/account/phone-numbers/verified\n" +
+                           "2. Add and verify your phone number\n" +
+                           "3. Or upgrade to a paid Twilio account\n\n" +
+                           "Please verify your phone number and try again.")
+                .setPositiveButton("OK", (dialog, which) -> {
+                    // Go back to login screen
+                    finish();
+                })
+                .setCancelable(false)
+                .show();
     }
 
 
@@ -319,4 +344,3 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 }
-

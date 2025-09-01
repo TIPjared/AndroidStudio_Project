@@ -124,7 +124,7 @@
                             android:textSize="14sp" />
                     </LinearLayout>
 
-                    <!-- Average Rating -->
+                    <!-- Total Cost -->
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
@@ -133,10 +133,10 @@
                         android:orientation="vertical">
 
                         <TextView
-                            android:id="@+id/avgRatingText"
+                            android:id="@+id/totalCostText"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="0.0"
+                            android:text="₱0"
                             android:textColor="#212121"
                             android:textSize="24sp"
                             android:textStyle="bold" />
@@ -144,7 +144,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Avg Rating"
+                            android:text="Total Cost"
                             android:textColor="#757575"
                             android:textSize="14sp" />
                     </LinearLayout>
@@ -270,6 +270,18 @@
                         android:text="Start a Ride"
                         android:textColor="#FFFFFF"
                         app:backgroundTint="#4CAF50"
+                        app:cornerRadius="24dp" />
+                        
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/createSampleDataButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:paddingStart="24dp"
+                        android:paddingEnd="24dp"
+                        android:text="Create Sample Data"
+                        android:textColor="#FFFFFF"
+                        app:backgroundTint="#2196F3"
                         app:cornerRadius="24dp" />
                 </LinearLayout>
             </FrameLayout>
