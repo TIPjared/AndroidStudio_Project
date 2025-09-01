@@ -64,7 +64,7 @@ dependencies {
     implementation(libs.constraintlayout)
     implementation(libs.firebase.auth)
     implementation ("com.google.firebase:firebase-firestore:25.0.0")
-    implementation ("com.google.firebase:firebase-auth:21.2.0")
+    implementation ("com.google.firebase:firebase-auth:24.0.1")
     implementation ("com.google.firebase:firebase-common:21.0.0")
     implementation ("com.google.firebase:firebase-analytics:21.1.0")
     implementation ("com.google.android.material:material:1.11.0") // or latest

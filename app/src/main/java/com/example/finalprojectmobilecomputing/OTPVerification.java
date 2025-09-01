@@ -5,31 +5,27 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.provider.Settings;
-import android.view.View;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.google.android.gms.tasks.OnCompleteListener;
-import com.google.android.gms.tasks.Task;
-import com.google.android.material.textfield.TextInputEditText;
-import com.google.firebase.FirebaseException;
-import com.google.firebase.FirebaseTooManyRequestsException;
-import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException;
 import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.auth.PhoneAuthCredential;
-import com.google.firebase.auth.PhoneAuthOptions;
-import com.google.firebase.auth.PhoneAuthProvider;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.android.material.textfield.TextInputEditText;
 
-import java.util.concurrent.TimeUnit;
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.FormBody;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
+import java.io.IOException;
 
 public class OTPVerification extends AppCompatActivity {
 
@@ -38,20 +34,17 @@ public class OTPVerification extends AppCompatActivity {
     private TextView resendOtpButton;
     private ImageButton backButton;
 
-    private String verificationId;
     private FirebaseAuth mAuth;
     private FirebaseFirestore db;
     private String phoneNumber;
-    private PhoneAuthProvider.ForceResendingToken resendToken;
     private CountDownTimer resendTimer;
-    private boolean isVerified = false;
-    
+
     // Constants for rate limiting
     private static final String PREFS_NAME = "OTPVerificationPrefs";
     private static final String LAST_REQUEST_TIME = "lastRequestTime";
     private static final String REQUEST_COUNT = "requestCount";
-    private static final long COOLDOWN_PERIOD = 3600000; // 1 hour in milliseconds
-    private static final int MAX_REQUESTS = 5; // Max requests in cooldown period
+    private static final long COOLDOWN_PERIOD = 3600000; // 1 hour
+    private static final int MAX_REQUESTS = 5; // Max requests per cooldown
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,71 +59,44 @@ public class OTPVerification extends AppCompatActivity {
         mAuth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
 
-        // Set up back button listener to return to login screen
+        // 🔙 Back button → login
         backButton.setOnClickListener(v -> {
-            // Go back to login screen
-            Intent intent = new Intent(OTPVerification.this, MainActivity.class);
-            startActivity(intent);
+            startActivity(new Intent(OTPVerification.this, MainActivity.class));
             finish();
         });
 
         FirebaseUser currentUser = mAuth.getCurrentUser();
-
         if (currentUser == null) {
             Toast.makeText(this, "User not logged in", Toast.LENGTH_SHORT).show();
             startActivity(new Intent(OTPVerification.this, MainActivity.class));
             finish();
             return;
         }
-
+        phoneNumber = getIntent().getStringExtra("phone");
         String userId = currentUser.getUid();
 
-        // 🔍 Step 1: Retrieve phone number from Firestore
-        db.collection("users").document(userId)
-                .get()
-                .addOnSuccessListener(documentSnapshot -> {
-                    if (documentSnapshot.exists()) {
-                        phoneNumber = documentSnapshot.getString("phone");
+        if (phoneNumber == null || phoneNumber.isEmpty()) {
+            Toast.makeText(this, "Phone number missing, please login again", Toast.LENGTH_SHORT).show();
+            startActivity(new Intent(OTPVerification.this, MainActivity.class));
+            finish();
+            return;
+        }
 
-                        if (phoneNumber != null && !phoneNumber.isEmpty()) {
-                            phoneNumber = "+63" + phoneNumber; // Format with country code
-                            if (canSendVerification()) {
-                                sendOTP(phoneNumber, false); // Send initial OTP
-                            } else {
-                                showCooldownMessage();
-                            }
-                        } else {
-                            Toast.makeText(this, "Phone number is missing in your profile", Toast.LENGTH_SHORT).show();
-                            // Redirect user to add their phone number
-                            startActivity(new Intent(OTPVerification.this, Profile.class));
-                            finish();
-                        }
-                    } else {
-                        Toast.makeText(this, "User data not found", Toast.LENGTH_SHORT).show();
-                    }
-                })
-                .addOnFailureListener(e -> {
-                    Toast.makeText(this, "Failed to fetch phone: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                });
-
-        // ✅ Step 2: Verify OTP manually (if not auto)
+        // ✅ Step 2: Verify OTP
         verifyOtpButton.setOnClickListener(v -> {
             String code = otpEditText.getText().toString().trim();
-
-            if (code.isEmpty() || verificationId == null) {
+            if (code.isEmpty()) {
                 Toast.makeText(this, "Enter OTP first", Toast.LENGTH_SHORT).show();
                 return;
             }
-
-            PhoneAuthCredential credential = PhoneAuthProvider.getCredential(verificationId, code);
-            signInWithPhoneAuthCredential(credential);
+            verifyOtpWithTwilio(phoneNumber, code, userId);
         });
-        
-        // ✅ Step 3: Resend OTP if needed
+
+        // ✅ Step 3: Resend OTP
         resendOtpButton.setOnClickListener(v -> {
             if (phoneNumber != null && !phoneNumber.isEmpty()) {
                 if (canSendVerification()) {
-                    resendOTP();
+                    sendOtpWithTwilio(phoneNumber); // 🔁 Call Twilio again
                 } else {
                     showCooldownMessage();
                 }
@@ -139,133 +105,164 @@ public class OTPVerification extends AppCompatActivity {
             }
         });
     }
-    
-    /**
-     * Check if we can send a verification code based on rate limits
-     */
+
+    private String normalizePhone(String raw) {
+        if (raw == null) return "";
+        String digits = raw.replaceAll("[^0-9+]", "");
+        if (digits.startsWith("+")) return digits;         // assume already E.164
+        if (digits.startsWith("0")) return "+63" + digits.substring(1);
+        // fallback: if it starts with 63 (no +)
+        if (digits.startsWith("63")) return "+" + digits;
+        // last resort: treat as local PH without 0
+        return "+63" + digits;
+    }
+
+
+    // 📤 Send OTP with Twilio backend
+    private void sendOtpWithTwilio(String phoneFromDb) {
+        setResendButtonEnabled(false);
+        Toast.makeText(this, "Sending verification code...", Toast.LENGTH_SHORT).show();
+        updateRequestCounter();
+
+        String phone = normalizePhone(phoneFromDb);
+
+        OkHttpClient client = new OkHttpClient();
+        String url = "https://twiliootp-0ov5.onrender.com/otp/start";
+
+        String json = "{ \"phone\": \"" + phone + "\" }";
+        RequestBody body = RequestBody.create(
+                json, okhttp3.MediaType.parse("application/json; charset=utf-8"));
+
+        Request request = new Request.Builder()
+                .url(url)
+                .post(body)
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override public void onFailure(Call call, IOException e) {
+                runOnUiThread(() -> {
+                    Toast.makeText(OTPVerification.this, "Failed to send OTP", Toast.LENGTH_SHORT).show();
+                    setResendButtonEnabled(true);
+                });
+            }
+
+            @Override public void onResponse(Call call, Response response) throws IOException {
+                final String respBody = response.body() != null ? response.body().string() : "";
+                android.util.Log.d("OTP_START", "code=" + response.code() + " body=" + respBody);
+                runOnUiThread(() -> {
+                    if (response.isSuccessful()) {
+                        Toast.makeText(OTPVerification.this, "OTP sent successfully!", Toast.LENGTH_SHORT).show();
+                        startResendTimer();
+                    } else {
+                        Toast.makeText(OTPVerification.this, "Error sending OTP (" + response.code() + ")", Toast.LENGTH_SHORT).show();
+                        setResendButtonEnabled(true);
+                    }
+                });
+            }
+        });
+    }
+
+
+    // 📥 Verify OTP with Twilio backend
+    private void verifyOtpWithTwilio(String phoneFromDb, String code, String userId) {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) {
+            Toast.makeText(this, "Not logged in", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        final String phone = normalizePhone(phoneFromDb);
+
+        user.getIdToken(true).addOnSuccessListener(result -> {
+            String idToken = result.getToken();
+
+            OkHttpClient client = new OkHttpClient();
+            String url = "https://twiliootp-0ov5.onrender.com/otp/check";
+
+            String json = "{ \"phone\": \"" + phone + "\", \"code\": \"" + code + "\" }";
+            Request request = new Request.Builder()
+                    .url(url)
+                    .post(RequestBody.create(
+                            json, okhttp3.MediaType.parse("application/json; charset=utf-8")))
+                    .addHeader("Authorization", "Bearer " + idToken)
+                    .build();
+
+            client.newCall(request).enqueue(new Callback() {
+                @Override public void onFailure(Call call, IOException e) {
+                    runOnUiThread(() ->
+                            Toast.makeText(OTPVerification.this, "Verification failed", Toast.LENGTH_SHORT).show()
+                    );
+                }
+
+                @Override public void onResponse(Call call, Response response) throws IOException {
+                    final String respBody = response.body() != null ? response.body().string() : "";
+                    android.util.Log.d("OTP_CHECK", "code=" + response.code() + " body=" + respBody);
+
+                    runOnUiThread(() -> {
+                        if (response.isSuccessful()) {
+                            // Server already set phoneVerified=true in Firestore.
+                            // If you also want to pin the deviceId client-side, do it here:
+                            FirebaseFirestore.getInstance().collection("users").document(userId)
+                                    .update("deviceId", Settings.Secure.getString(
+                                            getContentResolver(), Settings.Secure.ANDROID_ID))
+                                    .addOnCompleteListener(t -> {
+                                        Toast.makeText(OTPVerification.this, "Verification successful!", Toast.LENGTH_SHORT).show();
+                                        startActivity(new Intent(OTPVerification.this, MainPage.class));
+                                        finish();
+                                    });
+                        } else {
+                            Toast.makeText(OTPVerification.this, "Invalid OTP", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }
+            });
+        }).addOnFailureListener(e ->
+                Toast.makeText(OTPVerification.this, "Auth error, please re-login", Toast.LENGTH_SHORT).show()
+        );
+    }
+
+
+    // 📊 Rate limiting methods
     private boolean canSendVerification() {
         SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
         long lastRequestTime = settings.getLong(LAST_REQUEST_TIME, 0);
         int requestCount = settings.getInt(REQUEST_COUNT, 0);
         long currentTime = System.currentTimeMillis();
-        
-        // If it's been more than the cooldown period, reset counter
+
         if (currentTime - lastRequestTime > COOLDOWN_PERIOD) {
-            SharedPreferences.Editor editor = settings.edit();
-            editor.putInt(REQUEST_COUNT, 0);
-            editor.apply();
+            settings.edit().putInt(REQUEST_COUNT, 0).apply();
             return true;
         }
-        
-        // If we haven't exceeded max requests, allow it
         return requestCount < MAX_REQUESTS;
     }
-    
-    /**
-     * Update the request counter
-     */
+
     private void updateRequestCounter() {
         SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
         int requestCount = settings.getInt(REQUEST_COUNT, 0);
-        long currentTime = System.currentTimeMillis();
-        
-        SharedPreferences.Editor editor = settings.edit();
-        editor.putLong(LAST_REQUEST_TIME, currentTime);
-        editor.putInt(REQUEST_COUNT, requestCount + 1);
-        editor.apply();
+        settings.edit()
+                .putLong(LAST_REQUEST_TIME, System.currentTimeMillis())
+                .putInt(REQUEST_COUNT, requestCount + 1)
+                .apply();
     }
-    
-    /**
-     * Show cooldown message to user
-     */
+
     private void showCooldownMessage() {
         SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
         long lastRequestTime = settings.getLong(LAST_REQUEST_TIME, 0);
         long currentTime = System.currentTimeMillis();
         long timeRemaining = COOLDOWN_PERIOD - (currentTime - lastRequestTime);
-        
+
         if (timeRemaining > 0) {
             int minutesRemaining = (int) (timeRemaining / 60000);
-            Toast.makeText(this, 
-                "Too many verification attempts. Please try again in " + 
-                (minutesRemaining > 0 ? minutesRemaining + " minutes" : "a moment"), 
-                Toast.LENGTH_LONG).show();
+            Toast.makeText(this,
+                    "Too many attempts. Try again in " +
+                            (minutesRemaining > 0 ? minutesRemaining + " minutes" : "a moment"),
+                    Toast.LENGTH_LONG).show();
         }
     }
 
-    // 📤 Send OTP using Firebase PhoneAuth
-    private void sendOTP(String phoneNumberWithCode, boolean isResend) {
-        setResendButtonEnabled(false);
-        
-        // Show progress or loading indicator
-        Toast.makeText(this, "Sending verification code...", Toast.LENGTH_SHORT).show();
-        
-        // Update request counter
-        updateRequestCounter();
-        
-        PhoneAuthOptions.Builder builder = PhoneAuthOptions.newBuilder(mAuth)
-                .setPhoneNumber(phoneNumberWithCode)
-                .setTimeout(60L, TimeUnit.SECONDS)
-                .setActivity(this)
-                .setCallbacks(new PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
-
-                    @Override
-                    public void onVerificationCompleted(PhoneAuthCredential credential) {
-                        // Auto verification (happens on some devices)
-                        Toast.makeText(OTPVerification.this, "Verification completed automatically", Toast.LENGTH_SHORT).show();
-                        signInWithPhoneAuthCredential(credential);
-                    }
-
-                    @Override
-                    public void onVerificationFailed(FirebaseException e) {
-                        // This callback is invoked if verification fails
-                        if (e instanceof FirebaseAuthInvalidCredentialsException) {
-                            Toast.makeText(OTPVerification.this, "Invalid phone number format", Toast.LENGTH_LONG).show();
-                        } else if (e instanceof FirebaseTooManyRequestsException) {
-                            Toast.makeText(OTPVerification.this, "Firebase quota exceeded. Try again later or use a different phone number.", Toast.LENGTH_LONG).show();
-                            
-                            // Force a longer cooldown when quota is exceeded
-                            SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
-                            SharedPreferences.Editor editor = settings.edit();
-                            editor.putLong(LAST_REQUEST_TIME, System.currentTimeMillis());
-                            editor.putInt(REQUEST_COUNT, MAX_REQUESTS);
-                            editor.apply();
-                        } else {
-                            Toast.makeText(OTPVerification.this, "Verification failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                        }
-                        setResendButtonEnabled(true);
-                    }
-
-                    @Override
-                    public void onCodeSent(String verificationIdFromFirebase, PhoneAuthProvider.ForceResendingToken token) {
-                        // Save verification ID and token
-                        verificationId = verificationIdFromFirebase;
-                        resendToken = token;
-                        Toast.makeText(OTPVerification.this, "Verification code sent", Toast.LENGTH_SHORT).show();
-                        startResendTimer();
-                    }
-                });
-                
-        if (isResend && resendToken != null) {
-            builder.setForceResendingToken(resendToken);
-        }
-        
-        PhoneAuthProvider.verifyPhoneNumber(builder.build());
-    }
-    
-    // Resend OTP with saved token
-    private void resendOTP() {
-        if (phoneNumber != null && !phoneNumber.isEmpty()) {
-            sendOTP(phoneNumber, true);
-        }
-    }
-    
-    // Start countdown timer for resend button
     private void startResendTimer() {
-        if (resendTimer != null) {
-            resendTimer.cancel();
-        }
-        
+        if (resendTimer != null) resendTimer.cancel();
+
         resendTimer = new CountDownTimer(60000, 1000) {
             @Override
             public void onTick(long millisUntilFinished) {
@@ -280,66 +277,21 @@ public class OTPVerification extends AppCompatActivity {
             }
         }.start();
     }
-    
+
     private void setResendButtonEnabled(boolean enabled) {
         resendOtpButton.setEnabled(enabled);
-        resendOtpButton.setClickable(enabled);
         resendOtpButton.setAlpha(enabled ? 1.0f : 0.5f);
     }
 
-    // ✅ Sign in with OTP credential
-    // ✅ Verify OTP credential without re-authenticating user
-    private void signInWithPhoneAuthCredential(PhoneAuthCredential credential) {
-        FirebaseUser currentUser = mAuth.getCurrentUser();
-        if (currentUser == null) {
-            Toast.makeText(this, "User not logged in", Toast.LENGTH_SHORT).show();
-            startActivity(new Intent(OTPVerification.this, MainActivity.class));
-            finish();
-            return;
-        }
-
-        // Just link the credential instead of re-sign-in
-        currentUser.updatePhoneNumber(credential)
-                .addOnCompleteListener(task -> {
-                    if (task.isSuccessful()) {
-                        Toast.makeText(OTPVerification.this, "Verification successful!", Toast.LENGTH_SHORT).show();
-
-                        // Update Firestore record
-                        db.collection("users").document(currentUser.getUid())
-                                .update(
-                                        "phoneVerified", true,
-                                        "deviceId", Settings.Secure.getString(
-                                                getContentResolver(), Settings.Secure.ANDROID_ID)
-                                )
-                                .addOnSuccessListener(aVoid -> {
-                                    startActivity(new Intent(OTPVerification.this, MainPage.class));
-                                    finish();
-                                });
-                    } else {
-                        if (task.getException() instanceof FirebaseAuthInvalidCredentialsException) {
-                            Toast.makeText(OTPVerification.this, "Invalid verification code", Toast.LENGTH_SHORT).show();
-                        } else {
-                            Toast.makeText(OTPVerification.this, "Verification failed: " + task.getException().getMessage(),
-                                    Toast.LENGTH_SHORT).show();
-                        }
-                    }
-                });
-    }
-    
     @Override
     public void onBackPressed() {
-        // Navigate back to login screen
-        Intent intent = new Intent(OTPVerification.this, MainActivity.class);
-        startActivity(intent);
+        startActivity(new Intent(OTPVerification.this, MainActivity.class));
         finish();
     }
-    
+
     @Override
     protected void onDestroy() {
-        if (resendTimer != null) {
-            resendTimer.cancel();
-        }
+        if (resendTimer != null) resendTimer.cancel();
         super.onDestroy();
     }
 }
-

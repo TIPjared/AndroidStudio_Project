@@ -35,8 +35,17 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.firebase.firestore.FirebaseFirestore;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.FormBody;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -182,6 +191,7 @@ public class MainActivity extends AppCompatActivity {
                     if (document.exists()) {
                         Boolean phoneVerified = document.getBoolean("phoneVerified");
                         String savedDeviceId = document.getString("deviceId");
+                        String phoneNumber = document.getString("phone"); // <-- store user phone in Firestore at registration
 
                         String currentDeviceId = Settings.Secure.getString(
                                 getContentResolver(), Settings.Secure.ANDROID_ID);
@@ -192,9 +202,8 @@ public class MainActivity extends AppCompatActivity {
                             startActivity(new Intent(MainActivity.this, MainPage.class));
                             finish();
                         } else {
-                            // ❌ Either first login, not verified, or using a new device → OTP
-                            startActivity(new Intent(MainActivity.this, OTPVerification.class));
-                            finish();
+                            // ❌ OTP required → first send OTP via Twilio backend
+                            sendOtpRequest(phoneNumber, userId);
                         }
                     } else {
                         // 🚨 First time login → create record and force OTP
@@ -203,11 +212,11 @@ public class MainActivity extends AppCompatActivity {
                             Map<String, Object> newUser = new HashMap<>();
                             newUser.put("phoneVerified", false);
                             newUser.put("deviceId", null);
+                            newUser.put("phone", user.getPhoneNumber()); // <-- make sure phone is saved
                             db.collection("users").document(userId).set(newUser);
-                        }
 
-                        startActivity(new Intent(MainActivity.this, OTPVerification.class));
-                        finish();
+                            sendOtpRequest(user.getPhoneNumber(), userId);
+                        }
                     }
                 })
                 .addOnFailureListener(e -> {
@@ -215,6 +224,58 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
+    private String normalizePhone(String raw) {
+        if (raw == null) return "";
+        String digits = raw.replaceAll("[^0-9+]", "");
+        if (digits.startsWith("+")) return digits;
+        if (digits.startsWith("0")) return "+63" + digits.substring(1);
+        if (digits.startsWith("63")) return "+" + digits;
+        return "+63" + digits;
+    }
+    private void sendOtpRequest(String phoneNumber, String userId) {
+        if (phoneNumber == null || phoneNumber.isEmpty()) {
+            Toast.makeText(this, "No phone number found for user", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        OkHttpClient client = new OkHttpClient();
+        String url = "https://twiliootp-0ov5.onrender.com/otp/start";
+
+        // JSON payload
+        String json = "{ \"phone\": \"" + phoneNumber + "\" }";
+        RequestBody body = RequestBody.create(json, okhttp3.MediaType.parse("application/json; charset=utf-8"));
+
+        Request request = new Request.Builder()
+                .url(url)
+                .post(body)
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                runOnUiThread(() ->
+                        Toast.makeText(MainActivity.this, "Failed to send OTP", Toast.LENGTH_SHORT).show()
+                );
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                if (response.isSuccessful()) {
+                    runOnUiThread(() -> {
+                        Intent intent = new Intent(MainActivity.this, OTPVerification.class);
+                        intent.putExtra("phone", phoneNumber);
+                        intent.putExtra("userId", userId);
+                        startActivity(intent);
+                        finish();
+                    });
+                } else {
+                    runOnUiThread(() ->
+                            Toast.makeText(MainActivity.this, "OTP request failed", Toast.LENGTH_SHORT).show()
+                    );
+                }
+            }
+        });
+    }
 
 
     private void signInWithGoogle() {

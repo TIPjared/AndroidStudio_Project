@@ -85,41 +85,41 @@ public class SignUpActivity extends AppCompatActivity {
             animateButton(googleSignUpButton);
             new Handler().postDelayed(() -> signUpWithGoogle(), 100);
         });
-        
+
         // Start animations
         startSignUpAnimations();
     }
-    
+
     private void startSignUpAnimations() {
         // Animate title texts
         TextView titleText = findViewById(R.id.textView8);
         TextView subtitleText = findViewById(R.id.textView9);
-        
+
         Animation fadeIn = AnimationUtils.loadAnimation(this, R.anim.fade_in);
         Animation slideInLeft = AnimationUtils.loadAnimation(this, R.anim.slide_in_left);
         Animation slideUp = AnimationUtils.loadAnimation(this, R.anim.slide_up);
         Animation bounceIn = AnimationUtils.loadAnimation(this, R.anim.bounce_in);
-        
+
         // Stagger animations
         titleText.startAnimation(fadeIn);
-        
+
         new Handler().postDelayed(() -> {
             subtitleText.startAnimation(slideInLeft);
         }, 200);
-        
+
         new Handler().postDelayed(() -> {
             findViewById(R.id.mainCardContainer).startAnimation(slideUp);
         }, 400);
-        
+
         new Handler().postDelayed(() -> {
             signUpButton.startAnimation(bounceIn);
         }, 600);
-        
+
         new Handler().postDelayed(() -> {
             findViewById(R.id.googleSignInContainer).startAnimation(bounceIn);
         }, 700);
     }
-    
+
     private void animateButton(View button) {
         Animation buttonPress = AnimationUtils.loadAnimation(this, R.anim.button_press);
         button.startAnimation(buttonPress);
@@ -129,7 +129,15 @@ public class SignUpActivity extends AppCompatActivity {
         String email = emailEditText.getText().toString().trim();
         String password = passwordEditText.getText().toString().trim();
         String confirmPassword = confirmPasswordEditText.getText().toString().trim();
-        String phone = phoneEditText.getText().toString().trim();
+        String phoneInput = phoneEditText.getText().toString().trim();
+        final String phone;
+
+        if (phoneInput.startsWith("0")) {
+            phone = "+63" + phoneInput.substring(1);
+        } else {
+            phone = phoneInput;
+        }
+
 
         if (email.isEmpty() || password.isEmpty() || confirmPassword.isEmpty() || phone.isEmpty()) {
             Toast.makeText(SignUpActivity.this, "Please fill in all fields", Toast.LENGTH_SHORT).show();
@@ -218,7 +226,7 @@ public class SignUpActivity extends AppCompatActivity {
                         // Save basic user info to Firestore
                         String userId = mAuth.getCurrentUser().getUid();
                         String email = mAuth.getCurrentUser().getEmail();
-                        
+
                         // Create a user entry in Firestore (without phone initially)
                         FirebaseFirestore db = FirebaseFirestore.getInstance();
                         db.collection("users").document(userId).set(new UserModel(email, ""))
