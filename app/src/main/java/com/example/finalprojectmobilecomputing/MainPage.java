@@ -209,22 +209,29 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 stopRide();
             } else {
                 // Otherwise → normal Pay Now flow
-                if (currentLocation != null && antelBoundary != null && !antelBoundary.isEmpty()) {
-                    if (PolyUtil.containsLocation(
-                            new LatLng(currentLocation.latitude, currentLocation.longitude),
-                            antelBoundary,
-                            true
-                    )) {
-                        Intent intent = new Intent(MainPage.this, QRScannerActivity.class);
-                        startActivity(intent);
-                    } else {
-                        Toast.makeText(this, "You must be inside Antel Grand Village to start a ride.", Toast.LENGTH_SHORT).show();
-                    }
+                if (currentLocation != null /* && antelBoundary != null && !antelBoundary.isEmpty() */) {
+                    // Geofence check commented out → bypass restriction
+            /*
+            if (PolyUtil.containsLocation(
+                    new LatLng(currentLocation.latitude, currentLocation.longitude),
+                    antelBoundary,
+                    true
+            )) {
+                Intent intent = new Intent(MainPage.this, QRScannerActivity.class);
+                startActivity(intent);
+            } else {
+                Toast.makeText(this, "You must be inside Antel Grand Village to start a ride.", Toast.LENGTH_SHORT).show();
+            }
+            */
+                    // Directly start QR scanner
+                    Intent intent = new Intent(MainPage.this, QRScannerActivity.class);
+                    startActivity(intent);
                 } else {
                     Toast.makeText(this, "Waiting for current location or geofence data...", Toast.LENGTH_SHORT).show();
                 }
             }
         });
+
 
         stopButton.setOnClickListener(v -> {
             if (currentLocation != null && antelBoundary != null && !antelBoundary.isEmpty()) {
@@ -316,39 +323,47 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     }
 
     private void setupPaymentCallback() {
-        String paymentStatus = getIntent().getStringExtra("payment_status");
-        if (paymentStatus != null && "success".equals(paymentStatus)) {
-            transactionAuthorized = true;
-            CardView locationCard = findViewById(R.id.locationCard);
-            locationCard.setVisibility(View.VISIBLE);
-            timerTextView.setVisibility(View.VISIBLE);
-            startRideTimer();
-            updateTransactionUI();
+        boolean paymentSuccess = false;
 
-            return;
+        // 1️⃣ Check Intent extra (for new server redirect)
+        String paymentStatus = getIntent().getStringExtra("payment_status");
+        if ("success".equals(paymentStatus)) {
+            paymentSuccess = true;
         }
 
-        // For backward compatibility, also check the URI data
+        // 2️⃣ Check Intent URI (covers old myapp:// scheme and HTTP redirect)
         Uri data = getIntent().getData();
         if (data != null) {
-            // Check old style myapp:// scheme
+            // Old myapp:// scheme
             if ("myapp".equals(data.getScheme()) && "main".equals(data.getHost())) {
-                String status = data.getQueryParameter("status");
+                String status = data.getQueryParameter("payment_status"); // updated to match server
                 if ("success".equals(status)) {
-                    transactionAuthorized = true;
+                    paymentSuccess = true;
                 }
             }
-            // Check HTTP scheme from sikad-static.onrender.com
+            // HTTP redirect from sikad-static.onrender.com
             else if (data.toString().contains("sikad-static.onrender.com")) {
                 String paymentParam = data.getQueryParameter("payment");
                 if ("success".equals(paymentParam)) {
-                    transactionAuthorized = true;
+                    paymentSuccess = true;
                     Toast.makeText(this, "Payment successful!", Toast.LENGTH_SHORT).show();
                 }
             }
         }
-        updateTransactionUI();
+
+        // 3️⃣ If payment succeeded, update UI and start timers
+        if (paymentSuccess) {
+            transactionAuthorized = true;
+
+            CardView locationCard = findViewById(R.id.locationCard);
+            locationCard.setVisibility(View.VISIBLE);
+
+            timerTextView.setVisibility(View.VISIBLE);
+
+            updateTransactionUI();  // updates buttons, visibility
+        }
     }
+
 
     private void updateTransactionUI() {
         if (transactionAuthorized) {
