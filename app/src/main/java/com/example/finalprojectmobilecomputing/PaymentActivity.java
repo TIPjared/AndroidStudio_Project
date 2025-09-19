@@ -17,16 +17,18 @@ import retrofit2.Callback;
 import retrofit2.Response;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
-import retrofit2.http.GET;
 import retrofit2.http.Body;
+import retrofit2.http.GET;
 import retrofit2.http.Headers;
 import retrofit2.http.POST;
+import retrofit2.http.Query;
 
 public class PaymentActivity extends AppCompatActivity {
 
     interface ServerApi {
         @GET("generate-token")
-        Call<Map<String, String>> getToken();
+        Call<Map<String, String>> getToken(@Query("bikeId") String bikeId,
+                                           @Query("qrCode") String qrCode);
     }
 
     interface PayMongoApi {
@@ -35,11 +37,25 @@ public class PaymentActivity extends AppCompatActivity {
         Call<Map<String, Object>> createSource(@Body Map<String, Object> body);
     }
 
+    private String bikeId;
+    private String qrCode;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // 1️⃣ Get one-time token from server
+        // Get extras from QRScannerActivity
+        Intent intent = getIntent();
+        bikeId = intent.getStringExtra("bike_id");
+        qrCode = intent.getStringExtra("qr_code");
+
+        if (bikeId == null || qrCode == null) {
+            Log.e("PAYMENT", "Missing QR or Bike ID");
+            finish();
+            return;
+        }
+
+        // 1️⃣ Get one-time token from server, include bikeId + qrCode
         HttpLoggingInterceptor interceptor = new HttpLoggingInterceptor();
         interceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
         OkHttpClient client = new OkHttpClient.Builder().addInterceptor(interceptor).build();
@@ -52,7 +68,7 @@ public class PaymentActivity extends AppCompatActivity {
 
         ServerApi serverApi = serverRetrofit.create(ServerApi.class);
 
-        serverApi.getToken().enqueue(new Callback<Map<String, String>>() {
+        serverApi.getToken(bikeId, qrCode).enqueue(new Callback<Map<String, String>>() {
             @Override
             public void onResponse(Call<Map<String, String>> call, Response<Map<String, String>> response) {
                 if (response.isSuccessful() && response.body() != null) {
@@ -100,7 +116,7 @@ public class PaymentActivity extends AppCompatActivity {
         attributes.put("type", "gcash");
 
         Map<String, String> redirect = new HashMap<>();
-        redirect.put("success", "https://sikad-server.onrender.com/success?token=" + token);
+        redirect.put("success", "https://sikad-server.onrender.com/success?token=" + token + "&bikeId=" + bikeId + "&qrCode=" + qrCode);
         redirect.put("failed", "https://sikad-static.onrender.com/?payment=failed");
         attributes.put("redirect", redirect);
 
