@@ -283,6 +283,10 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
 
         showCompletionDialog();
+        String bikeId = getIntent().getStringExtra("bikeId");
+        if (bikeId != null) {
+            revertQRCodeStatus(bikeId);
+        }
         updateTransactionUI();
         resetRideUI();
     }
@@ -364,6 +368,18 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         }
     }
 
+    private void revertQRCodeStatus(String bikeId) {
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
+        DocumentReference qrRef = db.collection("qr_codes").document(bikeId);
+
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("isActive", false);       // back to default
+        updates.put("status", "available");   // or whatever the original value is
+
+        qrRef.update(updates)
+                .addOnSuccessListener(aVoid -> Log.d("QR_CODE", "QR code reset after ride"))
+                .addOnFailureListener(e -> Log.e("QR_CODE", "Failed to reset QR code", e));
+    }
 
     private void updateTransactionUI() {
         if (transactionAuthorized) {
