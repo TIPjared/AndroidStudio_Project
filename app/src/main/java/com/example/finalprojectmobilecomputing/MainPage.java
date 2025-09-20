@@ -266,21 +266,31 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
 
         stopButton.setOnClickListener(v -> {
-            if (currentUserId == null) return;
+            // Retrieve scanned data from AppData
+            String qrCode = AppData.getInstance().getQrCode();
+            String currentUserId = AppData.getInstance().getUserId();
 
-            String bikeId = "bike_001_qr"; // or dynamically from QR scan
+            if (qrCode == null || currentUserId == null) {
+                Toast.makeText(MainPage.this, "No scanned bike or user found", Toast.LENGTH_SHORT).show();
+                return;
+            }
 
-            Map<String, String> payload = new HashMap<>();
-            payload.put("bikeId", bikeId);
-            payload.put("userId", currentUserId);
+            // Derive bikeId from QR code
+            String bikeId = qrCode.split("_qr")[0];
+
+            Map<String, String> endRidePayload = new HashMap<>();
+            endRidePayload.put("bikeId", bikeId);
+            endRidePayload.put("qrCode", qrCode);
+            endRidePayload.put("userId", currentUserId);
 
             OkHttpClient client = new OkHttpClient();
 
             // --- Call /endRide ---
             RequestBody endRideBody = RequestBody.create(
-                    new Gson().toJson(payload),
+                    new Gson().toJson(endRidePayload),
                     MediaType.parse("application/json; charset=utf-8")
             );
+
             Request endRideReq = new Request.Builder()
                     .url("https://sikad-server.onrender.com/endRide")
                     .post(endRideBody)
@@ -298,10 +308,14 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                     if (response.isSuccessful()) {
                         // --- Only after ending ride, lock the bike ---
+                        Map<String, String> lockPayload = new HashMap<>();
+                        lockPayload.put("bikeId", bikeId);
+
                         RequestBody lockBody = RequestBody.create(
-                                new Gson().toJson(Collections.singletonMap("bikeId", bikeId)),
+                                new Gson().toJson(lockPayload),
                                 MediaType.parse("application/json; charset=utf-8")
                         );
+
                         Request lockReq = new Request.Builder()
                                 .url("https://sikad-server.onrender.com/lockBike")
                                 .post(lockBody)
@@ -330,7 +344,6 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 }
             });
         });
-
 
 
         // --- Map fragment init ---
