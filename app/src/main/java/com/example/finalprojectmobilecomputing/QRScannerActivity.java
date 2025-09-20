@@ -112,8 +112,14 @@ public class QRScannerActivity extends AppCompatActivity {
 
         db.collection("qr_codes").document(code).get().addOnSuccessListener(document -> {
             if (document.exists()) {
-                // Pass both QR code and current Firebase UID
+                // Get current Firebase UID
                 String currentUserId = FirebaseAuth.getInstance().getCurrentUser().getUid();
+
+                // 1️⃣ Save to AppData singleton
+                AppData.getInstance().setQrCode(code);
+                AppData.getInstance().setUserId(currentUserId);
+
+                // 2️⃣ Pass to PaymentActivity via Intent
                 Intent i = new Intent(QRScannerActivity.this, PaymentActivity.class);
                 i.putExtra("qr_code", code);
                 i.putExtra("user_id", currentUserId);
@@ -129,6 +135,7 @@ public class QRScannerActivity extends AppCompatActivity {
             isScanned = false;
         });
     }
+
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
