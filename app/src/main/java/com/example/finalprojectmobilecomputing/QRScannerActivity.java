@@ -21,6 +21,9 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.mlkit.vision.barcode.common.Barcode;
 import com.google.mlkit.vision.barcode.BarcodeScanner;
@@ -42,25 +45,20 @@ public class QRScannerActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_qrscanner);
 
-        // Check and request camera permission if not granted
+        // Check and request camera permission
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
                 != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this,
                     new String[]{Manifest.permission.CAMERA}, 100);
         }
-
-        // Setup window insets (optional, for edge-to-edge layouts)
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
-
-        // Initialize PreviewView & BarcodeScanner
         previewView = findViewById(R.id.previewView);
         scanner = BarcodeScanning.getClient();
 
-        // Start the camera
         startCamera();
     }
 
@@ -82,15 +80,9 @@ public class QRScannerActivity extends AppCompatActivity {
 
         ImageAnalysis analysis = new ImageAnalysis.Builder().build();
         analysis.setAnalyzer(ContextCompat.getMainExecutor(this), image -> {
-            if (image.getImage() == null) {
-                image.close();
-                return;
-            }
 
-            InputImage inputImage = InputImage.fromMediaImage(
-                    image.getImage(),
-                    image.getImageInfo().getRotationDegrees()
-            );
+            if (image.getImage() == null) return;
+            InputImage inputImage = InputImage.fromMediaImage(image.getImage(), image.getImageInfo().getRotationDegrees());
 
             scanner.process(inputImage)
                     .addOnSuccessListener(barcodes -> {
@@ -115,21 +107,17 @@ public class QRScannerActivity extends AppCompatActivity {
         cameraProvider.bindToLifecycle(this, selector, preview, analysis);
     }
 
-    // ✅ Now fetches the full QR document data from Firestore
     private void validateQR(String code) {
         FirebaseFirestore db = FirebaseFirestore.getInstance();
 
         db.collection("qr_codes").document(code).get().addOnSuccessListener(document -> {
             if (document.exists()) {
-                String bikeId = document.getString("bike_id");
-                Boolean isActive = document.getBoolean("isActive");
-                String status = document.getString("status");
-
+                // Pass both QR code and current Firebase UID
+                String currentUserId = FirebaseAuth.getInstance().getCurrentUser().getUid();
                 Intent i = new Intent(QRScannerActivity.this, PaymentActivity.class);
-                i.putExtra("qr_code", code);   // doc ID
-                i.putExtra("bike_id", bikeId); // field value
-                i.putExtra("isActive", isActive != null ? isActive : false);
-                i.putExtra("status", status);
+                i.putExtra("qr_code", code);
+                i.putExtra("user_id", currentUserId);
+
                 startActivity(i);
                 finish();
             } else {

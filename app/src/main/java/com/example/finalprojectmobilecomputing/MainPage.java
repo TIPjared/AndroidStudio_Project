@@ -29,7 +29,9 @@ import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.firebase.Timestamp;
+import com.google.firebase.firestore.FirebaseFirestoreException;
 import com.google.firebase.firestore.GeoPoint;
+import com.google.gson.Gson;
 import com.google.maps.android.PolyUtil;
 
 import androidx.annotation.NonNull;
@@ -63,15 +65,27 @@ import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.SetOptions;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import com.google.firebase.firestore.FieldValue;
+import com.google.firebase.firestore.Transaction;
+import com.google.firebase.firestore.ListenerRegistration;
 
 import com.google.android.gms.location.GeofencingClient;
+
+import okhttp3.Call;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 
 public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
@@ -105,6 +119,15 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     private CountDownTimer countDownTimer;
     private CardView locationCard;
 
+    private FirebaseFirestore db;
+    private FirebaseUser currentUser;
+    private String currentUserId;
+    // for demo we use a single bike doc, replace with dynamic QR scan later
+
+    private ListenerRegistration bikeListener = null;
+    private boolean rideTimerStarted = false;
+    private static final String BIKE_DOC_PATH = "bike_qr/bike_001_qr";
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -133,6 +156,13 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
         // Firebase reference for logging rides
         rideLogsRef = FirebaseDatabase.getInstance().getReference("rideLogs");
+
+        // --- NEW: Firestore init ---
+        db = FirebaseFirestore.getInstance();
+        currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        currentUserId = (currentUser != null) ? currentUser.getUid() : null;
+
+        listenToBikeStatus();
 
         // Initially hide route controls
         stopButton.setVisibility(View.GONE);
@@ -209,9 +239,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 stopRide();
             } else {
                 // Otherwise → normal Pay Now flow
-                if (currentLocation != null /* && antelBoundary != null && !antelBoundary.isEmpty() */) {
-                    // Geofence check commented out → bypass restriction
-            /*
+                if (currentLocation != null && antelBoundary != null && !antelBoundary.isEmpty()) {
             if (PolyUtil.containsLocation(
                     new LatLng(currentLocation.latitude, currentLocation.longitude),
                     antelBoundary,
@@ -222,33 +250,83 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             } else {
                 Toast.makeText(this, "You must be inside Antel Grand Village to start a ride.", Toast.LENGTH_SHORT).show();
             }
-            */
                     // Directly start QR scanner
                     Intent intent = new Intent(MainPage.this, QRScannerActivity.class);
                     startActivity(intent);
+
                 } else {
-                    Toast.makeText(this, "Waiting for current location or geofence data...", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Waiting for current location data...", Toast.LENGTH_SHORT).show();
                 }
             }
         });
 
 
         stopButton.setOnClickListener(v -> {
-            if (currentLocation != null && antelBoundary != null && !antelBoundary.isEmpty()) {
-                if (PolyUtil.containsLocation(
-                        new LatLng(currentLocation.latitude, currentLocation.longitude),
-                        antelBoundary,
-                        true
-                )) {
-                    Toast.makeText(this, "Ride ended successfully.", Toast.LENGTH_LONG).show();
-                    stopRide();
-                } else {
-                    Toast.makeText(this, "You must return inside the area to end your ride.", Toast.LENGTH_SHORT).show();
+            if (currentUserId == null) return;
+
+            String bikeId = "bike_001_qr"; // or dynamically from QR scan
+
+            Map<String, String> payload = new HashMap<>();
+            payload.put("bikeId", bikeId);
+            payload.put("userId", currentUserId);
+
+            OkHttpClient client = new OkHttpClient();
+
+            // --- Call /endRide ---
+            RequestBody endRideBody = RequestBody.create(
+                    new Gson().toJson(payload),
+                    MediaType.parse("application/json; charset=utf-8")
+            );
+            Request endRideReq = new Request.Builder()
+                    .url("https://sikad-server.onrender.com/endRide")
+                    .post(endRideBody)
+                    .build();
+
+            client.newCall(endRideReq).enqueue(new okhttp3.Callback() {
+                @Override
+                public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                    runOnUiThread(() ->
+                            Toast.makeText(MainPage.this, "Failed to end ride: " + e.getMessage(), Toast.LENGTH_SHORT).show()
+                    );
                 }
-            } else {
-                Toast.makeText(this, "Waiting for current location or geofence data...", Toast.LENGTH_SHORT).show();
-            }
+
+                @Override
+                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                    if (response.isSuccessful()) {
+                        // --- Only after ending ride, lock the bike ---
+                        RequestBody lockBody = RequestBody.create(
+                                new Gson().toJson(Collections.singletonMap("bikeId", bikeId)),
+                                MediaType.parse("application/json; charset=utf-8")
+                        );
+                        Request lockReq = new Request.Builder()
+                                .url("https://sikad-server.onrender.com/lockBike")
+                                .post(lockBody)
+                                .build();
+
+                        client.newCall(lockReq).enqueue(new okhttp3.Callback() {
+                            @Override
+                            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                                runOnUiThread(() ->
+                                        Toast.makeText(MainPage.this, "Failed to lock bike: " + e.getMessage(), Toast.LENGTH_SHORT).show()
+                                );
+                            }
+
+                            @Override
+                            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                                runOnUiThread(() ->
+                                        Toast.makeText(MainPage.this, "Ride stopped and bike locked", Toast.LENGTH_SHORT).show()
+                                );
+                            }
+                        });
+                    } else {
+                        runOnUiThread(() ->
+                                Toast.makeText(MainPage.this, "Error ending ride", Toast.LENGTH_SHORT).show()
+                        );
+                    }
+                }
+            });
         });
+
 
 
         // --- Map fragment init ---
@@ -259,12 +337,71 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         }
     }
 
+    private void updateBikeOnStart() {
+        if (currentUserId == null) return;
+
+        DocumentReference bikeRef = db.document(BIKE_DOC_PATH);
+        db.runTransaction((Transaction.Function<Void>) transaction -> {
+                    DocumentSnapshot snapshot = transaction.get(bikeRef);
+
+                    String status = snapshot.getString("status");
+                    String rentedBy = snapshot.getString("rentedBy");
+
+                    if ("available".equals(status) && rentedBy == null) {
+                        Map<String, Object> updates = new HashMap<>();
+                        updates.put("status", "rented");
+                        updates.put("isActive", true);
+                        updates.put("rentedBy", currentUserId);
+                        transaction.update(bikeRef, updates);
+                    } else {
+                        throw new FirebaseFirestoreException(
+                                "Bike is already rented",
+                                FirebaseFirestoreException.Code.ABORTED
+                        );
+                    }
+                    return null;
+                }).addOnSuccessListener(aVoid ->
+                        Log.d("BikeUpdate", "Bike rented successfully"))
+                .addOnFailureListener(e ->
+                        Log.e("BikeUpdate", "Failed to rent bike", e));
+    }
+
+    private void updateBikeOnEnd() {
+        if (currentUserId == null) return;
+
+        DocumentReference bikeRef = db.document(BIKE_DOC_PATH);
+        db.runTransaction((Transaction.Function<Void>) transaction -> {
+                    DocumentSnapshot snapshot = transaction.get(bikeRef);
+
+                    String rentedBy = snapshot.getString("rentedBy");
+                    if (currentUserId.equals(rentedBy)) {
+                        Map<String, Object> updates = new HashMap<>();
+                        updates.put("status", "available");
+                        updates.put("isActive", false);
+                        updates.put("rentedBy", null); // clear ownership
+                        transaction.update(bikeRef, updates);
+                    } else {
+                        throw new FirebaseFirestoreException(
+                                "You cannot end this ride",
+                                FirebaseFirestoreException.Code.PERMISSION_DENIED
+                        );
+                    }
+                    return null;
+                }).addOnSuccessListener(aVoid ->
+                        Log.d("BikeUpdate", "Bike released successfully"))
+                .addOnFailureListener(e ->
+                        Log.e("BikeUpdate", "Failed to release bike", e));
+    }
+
 
     private void stopRide() {
         if (countDownTimer != null) countDownTimer.cancel();
         if (timerHandler != null && timerRunnable != null) timerHandler.removeCallbacks(timerRunnable);
 
         transactionAuthorized = false;
+
+        // NEW: release the bike in Firestore
+        updateBikeOnEnd();
 
         long rideDuration = System.currentTimeMillis() - startTime;
         int seconds = (int) (rideDuration / 1000);
@@ -275,19 +412,15 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         elapsedTimeTextView.setText(time);
         elapsedTimeTextView.setVisibility(View.VISIBLE);
 
-        distanceTextView.setVisibility(View.VISIBLE); // make sure distance stays visible
-        locationCard.setVisibility(View.VISIBLE);     // keep card visible
+        distanceTextView.setVisibility(View.VISIBLE);
+        locationCard.setVisibility(View.VISIBLE);
         stopButton.setVisibility(View.GONE);
         payButton.setVisibility(View.VISIBLE);
         payButton.setText("Pay Now");
 
-
         showCompletionDialog();
-        String bikeId = getIntent().getStringExtra("bikeId");
-        if (bikeId != null) {
-            revertQRCodeStatus(bikeId);
-        }
-        updateTransactionUI();
+        updateTransactionUI(false);
+
         resetRideUI();
     }
 
@@ -327,12 +460,21 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     }
 
     private void setupPaymentCallback() {
-        boolean paymentSuccess = false;
-
-        // 1️⃣ Check Intent extra (for new server redirect)
         String paymentStatus = getIntent().getStringExtra("payment_status");
-        if ("success".equals(paymentStatus)) {
-            paymentSuccess = true;
+        if (paymentStatus != null && "success".equals(paymentStatus)) {
+            transactionAuthorized = true;
+
+            // NEW: claim the bike in Firestore (your transaction)
+            updateBikeOnStart();
+
+            CardView locationCard = findViewById(R.id.locationCard);
+            locationCard.setVisibility(View.VISIBLE);
+            timerTextView.setVisibility(View.VISIBLE);
+
+            // start ride UI immediately
+            startRideTimer();
+            updateTransactionUI(true);   // <-- IMPORTANT: was false before
+            return;
         }
 
         // 2️⃣ Check Intent URI (covers old myapp:// scheme and HTTP redirect)
@@ -354,48 +496,108 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 }
             }
         }
+        updateTransactionUI(false);
 
-        // 3️⃣ If payment succeeded, update UI and start timers
-        if (paymentSuccess) {
-            transactionAuthorized = true;
+    }
 
-            CardView locationCard = findViewById(R.id.locationCard);
-            locationCard.setVisibility(View.VISIBLE);
-
-            timerTextView.setVisibility(View.VISIBLE);
-
-            updateTransactionUI();  // updates buttons, visibility
+    // 🔊 Listen for live updates on the bike document
+    // 🔊 Listen for live updates on qr_codes where rentedBy == currentUserId
+    private void listenToBikeStatus() {
+        // if user not logged in yet, log and return (we'll attach again later)
+        if (currentUserId == null) {
+            Log.d("MainPage", "listenToBikeStatus: no currentUserId — skipping listener for now.");
+            return;
         }
-    }
 
-    private void revertQRCodeStatus(String bikeId) {
-        FirebaseFirestore db = FirebaseFirestore.getInstance();
-        DocumentReference qrRef = db.collection("qr_codes").document(bikeId);
-
-        Map<String, Object> updates = new HashMap<>();
-        updates.put("isActive", false);       // back to default
-        updates.put("status", "available");   // or whatever the original value is
-
-        qrRef.update(updates)
-                .addOnSuccessListener(aVoid -> Log.d("QR_CODE", "QR code reset after ride"))
-                .addOnFailureListener(e -> Log.e("QR_CODE", "Failed to reset QR code", e));
-    }
-
-    private void updateTransactionUI() {
-        if (transactionAuthorized) {
-            payButton.setText("Stop Ride");
-            locationCard.setVisibility(View.VISIBLE);
-            distanceTextView.setVisibility(View.VISIBLE);
-            timerTextView.setVisibility(View.VISIBLE);
-
-            startRideTimer();
-            startLocationUpdates();
-            startTimer();
-        } else {
-            payButton.setText("Pay Now");
-            stopButton.setVisibility(View.GONE);
+        // remove any existing listener to avoid duplicates
+        if (bikeListener != null) {
+            bikeListener.remove();
+            bikeListener = null;
         }
+
+        bikeListener = db.collection("qr_codes")
+                .whereEqualTo("rentedBy", currentUserId)
+                .addSnapshotListener((snapshots, e) -> {
+                    if (e != null) {
+                        Log.e("MainPage", "listenToBikeStatus failed", e);
+                        return;
+                    }
+
+                    boolean shouldActivate = false;
+
+                    if (snapshots != null && !snapshots.isEmpty()) {
+                        for (DocumentSnapshot doc : snapshots.getDocuments()) {
+                            String status = doc.getString("status");
+                            Boolean isActive = doc.getBoolean("isActive");
+                            Log.d("MainPage", "qr_doc=" + doc.getId() + " status=" + status + " isActive=" + isActive);
+
+                            // treat both "paid" and "rented" as valid active states (server uses "paid")
+                            if (( "paid".equals(status) || "rented".equals(status) )
+                                    && Boolean.TRUE.equals(isActive)) {
+                                shouldActivate = true;
+                                break;
+                            }
+                        }
+                    } else {
+                        Log.d("MainPage", "listenToBikeStatus: no docs matching rentedBy=" + currentUserId);
+                    }
+
+                    updateTransactionUI(shouldActivate);
+                });
+
+        Log.d("MainPage", "listenToBikeStatus: attached listener for user=" + currentUserId);
     }
+
+    private void updateTransactionUI(boolean isActive) {
+        runOnUiThread(() -> {
+            if (isActive) {
+                payButton.setText("Stop Ride");
+                payButton.setVisibility(View.INVISIBLE);
+                stopButton.setVisibility(View.VISIBLE);
+                locationCard.setVisibility(View.VISIBLE);
+
+                // only start timers/locations once
+                if (!rideTimerStarted) {
+                    rideTimerStarted = true;
+                    transactionAuthorized = true;
+
+                    // start the ride timers/location updates
+                    startLocationUpdates();   // existing method
+                    startTimer();             // existing method for elapsed timer
+                    startRideTimer();         // your 30-minute countdown (or test 30s)
+                }
+            } else {
+                // turn off ride UI
+                payButton.setText("Pay Now");
+                payButton.setVisibility(View.VISIBLE);
+                stopButton.setVisibility(View.GONE);
+                locationCard.setVisibility(View.GONE);
+
+                // stop timers & location updates if they were started
+                if (rideTimerStarted) {
+                    rideTimerStarted = false;
+                    transactionAuthorized = false;
+
+                    // cancel the ride timer and elapsed timer
+                    stopRideTimer(); // cancels countDownTimer
+                    if (timerHandler != null && timerRunnable != null) {
+                        timerHandler.removeCallbacks(timerRunnable);
+                    }
+
+                    // stop location updates gracefully
+                    if (locationCallback != null) {
+                        try {
+                            LocationServices.getFusedLocationProviderClient(MainPage.this)
+                                    .removeLocationUpdates(locationCallback);
+                        } catch (SecurityException ex) {
+                            Log.w("MainPage", "removeLocationUpdates failed", ex);
+                        }
+                    }
+                }
+            }
+        });
+    }
+
 
     private void startTimer() {
         startTime = System.currentTimeMillis();
@@ -828,6 +1030,21 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         // Refresh user profile data in navigation header when returning to this screen
         View headerView = navigationView.getHeaderView(0);
         loadUserProfileData(headerView);
+
+        currentUserId = FirebaseAuth.getInstance().getCurrentUser() != null
+                ? FirebaseAuth.getInstance().getCurrentUser().getUid()
+                : null;
+
+        listenToBikeStatus();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (bikeListener != null) {
+            bikeListener.remove();
+            bikeListener = null;
+        }
     }
 }
 
