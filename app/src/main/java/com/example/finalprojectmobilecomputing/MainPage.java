@@ -239,9 +239,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 stopRide();
             } else {
                 // Otherwise → normal Pay Now flow
-                if (currentLocation != null /* && antelBoundary != null && !antelBoundary.isEmpty() */) {
-                    // 🔒 Disabled geofence restriction for testing
-            /*
+                if (currentLocation != null && antelBoundary != null && !antelBoundary.isEmpty()) {
             if (PolyUtil.containsLocation(
                     new LatLng(currentLocation.latitude, currentLocation.longitude),
                     antelBoundary,
@@ -252,9 +250,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             } else {
                 Toast.makeText(this, "You must be inside Antel Grand Village to start a ride.", Toast.LENGTH_SHORT).show();
             }
-            */
-
-                    // 🚴 Always allow testing regardless of location
+                    // Directly start QR scanner
                     Intent intent = new Intent(MainPage.this, QRScannerActivity.class);
                     startActivity(intent);
 
@@ -437,6 +433,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
         showCompletionDialog();
         updateTransactionUI(false);
+
         resetRideUI();
     }
 
@@ -493,26 +490,27 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             return;
         }
 
-        // For backward compatibility, also check the URI data
+        // 2️⃣ Check Intent URI (covers old myapp:// scheme and HTTP redirect)
         Uri data = getIntent().getData();
         if (data != null) {
-            // Check old style myapp:// scheme
+            // Old myapp:// scheme
             if ("myapp".equals(data.getScheme()) && "main".equals(data.getHost())) {
-                String status = data.getQueryParameter("status");
+                String status = data.getQueryParameter("payment_status"); // updated to match server
                 if ("success".equals(status)) {
-                    transactionAuthorized = true;
+                    paymentSuccess = true;
                 }
             }
-            // Check HTTP scheme from sikad-static.onrender.com
+            // HTTP redirect from sikad-static.onrender.com
             else if (data.toString().contains("sikad-static.onrender.com")) {
                 String paymentParam = data.getQueryParameter("payment");
                 if ("success".equals(paymentParam)) {
-                    transactionAuthorized = true;
+                    paymentSuccess = true;
                     Toast.makeText(this, "Payment successful!", Toast.LENGTH_SHORT).show();
                 }
             }
         }
         updateTransactionUI(false);
+
     }
 
     // 🔊 Listen for live updates on the bike document

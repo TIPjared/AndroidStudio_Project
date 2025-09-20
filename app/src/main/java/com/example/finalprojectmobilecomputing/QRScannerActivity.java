@@ -21,6 +21,7 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
@@ -50,13 +51,11 @@ public class QRScannerActivity extends AppCompatActivity {
             ActivityCompat.requestPermissions(this,
                     new String[]{Manifest.permission.CAMERA}, 100);
         }
-
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
-
         previewView = findViewById(R.id.previewView);
         scanner = BarcodeScanning.getClient();
 
@@ -81,6 +80,7 @@ public class QRScannerActivity extends AppCompatActivity {
 
         ImageAnalysis analysis = new ImageAnalysis.Builder().build();
         analysis.setAnalyzer(ContextCompat.getMainExecutor(this), image -> {
+
             if (image.getImage() == null) return;
             InputImage inputImage = InputImage.fromMediaImage(image.getImage(), image.getImageInfo().getRotationDegrees());
 
@@ -123,6 +123,7 @@ public class QRScannerActivity extends AppCompatActivity {
                 Intent i = new Intent(QRScannerActivity.this, PaymentActivity.class);
                 i.putExtra("qr_code", code);
                 i.putExtra("user_id", currentUserId);
+
                 startActivity(i);
                 finish();
             } else {
