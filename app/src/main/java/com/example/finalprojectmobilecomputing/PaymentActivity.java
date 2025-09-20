@@ -10,7 +10,6 @@ import androidx.appcompat.app.AppCompatActivity;
 import java.util.HashMap;
 import java.util.Map;
 
-import okhttp3.Credentials;
 import okhttp3.OkHttpClient;
 import okhttp3.logging.HttpLoggingInterceptor;
 import retrofit2.Call;
@@ -26,8 +25,16 @@ import retrofit2.http.Query;
 
 public class PaymentActivity extends AppCompatActivity {
 
+    interface ServerApi {
+        @GET("generate-token")
+        Call<Map<String, String>> getToken(@Query("bikeId") String bikeId,
+                                           @Query("qrCode") String qrCode);
+    }
+
     interface PayMongoApi {
+
         @Headers({"Content-Type: application/json"})
+
         @POST("sources")
         Call<Map<String, Object>> createSource(@Body Map<String, Object> body);
     }
@@ -41,6 +48,7 @@ public class PaymentActivity extends AppCompatActivity {
         );
     }
 
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -51,6 +59,7 @@ public class PaymentActivity extends AppCompatActivity {
 
         if (qrCode == null || userId == null) {
             Log.e("PAYMENT", "Missing qrCode or userId");
+
             finish();
             return;
         }
@@ -63,6 +72,7 @@ public class PaymentActivity extends AppCompatActivity {
         interceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
 
         OkHttpClient baseClient = new OkHttpClient.Builder()
+
                 .addInterceptor(interceptor)
                 .build();
 
@@ -157,7 +167,6 @@ public class PaymentActivity extends AppCompatActivity {
                             Log.e("PAYMENT", "Network failure", t);
                         }
                     });
-
                 } else {
                     Log.e("PAYMENT", "Server Error: " + response.code());
                 }
