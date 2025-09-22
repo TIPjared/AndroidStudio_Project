@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.EditText;
@@ -22,8 +23,10 @@ import androidx.viewpager2.widget.ViewPager2;
 import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.SetOptions;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -116,20 +119,41 @@ public class SupportFeedbackActivity extends AppCompatActivity {
                 String email = emailInput.getText().toString().trim();
                 String issue = issueInput.getText().toString().trim();
                 
+                // Validation
                 if (TextUtils.isEmpty(name)) {
                     nameInput.setError("Please enter your name");
+                    nameInput.requestFocus();
                     return;
                 }
                 
                 if (TextUtils.isEmpty(email)) {
                     emailInput.setError("Please enter your email");
+                    emailInput.requestFocus();
+                    return;
+                }
+                
+                if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                    emailInput.setError("Please enter a valid email address");
+                    emailInput.requestFocus();
                     return;
                 }
                 
                 if (TextUtils.isEmpty(issue)) {
                     issueInput.setError("Please describe your issue");
+                    issueInput.requestFocus();
                     return;
                 }
+                
+                if (issue.length() < 20) {
+                    issueInput.setError("Please provide more details (at least 20 characters)");
+                    issueInput.requestFocus();
+                    return;
+                }
+                
+                // Clear any previous errors
+                nameInput.setError(null);
+                emailInput.setError(null);
+                issueInput.setError(null);
                 
                 // Save to Firebase
                 saveSupportRequest(name, email, issue);
@@ -160,6 +184,7 @@ public class SupportFeedbackActivity extends AppCompatActivity {
         
         private void saveSupportRequest(String name, String email, String issue) {
             FirebaseFirestore db = FirebaseFirestore.getInstance();
+            FirebaseAuth mAuth = FirebaseAuth.getInstance();
             
             Map<String, Object> supportRequest = new HashMap<>();
             supportRequest.put("name", name);
@@ -167,16 +192,31 @@ public class SupportFeedbackActivity extends AppCompatActivity {
             supportRequest.put("issue", issue);
             supportRequest.put("timestamp", System.currentTimeMillis());
             supportRequest.put("status", "pending");
+            supportRequest.put("priority", "medium");
+            supportRequest.put("category", "general_support");
+            supportRequest.put("userId", mAuth.getCurrentUser() != null ? mAuth.getCurrentUser().getUid() : "guest");
+            supportRequest.put("appVersion", "1.0.0");
+            supportRequest.put("assignedTo", "");
+            supportRequest.put("response", "");
+            supportRequest.put("testId", "SUPPORT_TEST_" + System.currentTimeMillis()); // Unique test identifier
+            supportRequest.put("submissionTime", new java.util.Date().toString()); // Human readable time
+            
+            Log.d("Support", "Attempting to save support request to Firebase");
+            Log.d("Support", "Support request data: " + supportRequest.toString());
             
             db.collection("support_requests")
                 .add(supportRequest)
                 .addOnSuccessListener(documentReference -> {
-                    // Success, already handled in the click listener
+                    Log.d("Support", "Support request saved with ID: " + documentReference.getId());
+                    if (getContext() != null) {
+                        Toast.makeText(getContext(), "Support request submitted successfully!", Toast.LENGTH_SHORT).show();
+                    }
                 })
                 .addOnFailureListener(e -> {
                     // Error handling
                     if (getContext() != null) {
-                        Toast.makeText(getContext(), "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getContext(), "Error submitting request: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        Log.e("Support", "Error saving support request", e);
                     }
                 });
         }
@@ -188,21 +228,17 @@ public class SupportFeedbackActivity extends AppCompatActivity {
         }
         
         private void openFaqWebpage() {
-            Intent intent = new Intent(Intent.ACTION_VIEW);
-            intent.setData(Uri.parse("https://example.com/sikad/faq"));
+            Intent intent = new Intent(getContext(), FAQActivity.class);
             startActivity(intent);
         }
         
         private void emailSupportTeam() {
-            Intent intent = new Intent(Intent.ACTION_SENDTO);
-            intent.setData(Uri.parse("mailto:support@sikad.com"));
-            intent.putExtra(Intent.EXTRA_SUBJECT, "Sikad App Support Request");
-            startActivity(Intent.createChooser(intent, "Send Email"));
+            Intent intent = new Intent(getContext(), ContactSupportActivity.class);
+            startActivity(intent);
         }
         
         private void openHelpCenterWebpage() {
-            Intent intent = new Intent(Intent.ACTION_VIEW);
-            intent.setData(Uri.parse("https://example.com/sikad/help"));
+            Intent intent = new Intent(getContext(), HelpCenterActivity.class);
             startActivity(intent);
         }
     }
@@ -212,7 +248,6 @@ public class SupportFeedbackActivity extends AppCompatActivity {
         
         private FirebaseFirestore db;
         private float userRating = 0;
-        private String feedbackType = "suggestion";
         private boolean isAnonymous = false;
         
         public FeedbackFragment() {
@@ -225,6 +260,32 @@ public class SupportFeedbackActivity extends AppCompatActivity {
             
             db = FirebaseFirestore.getInstance();
             
+            // Test Firebase connectivity
+            Log.d("Feedback", "=== FIREBASE CONNECTIVITY TEST ===");
+            Log.d("Feedback", "Firestore instance: " + (db != null ? "OK" : "NULL"));
+            
+            // Test a simple read to verify connectivity
+            db.collection("test").limit(1).get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    Log.d("Feedback", "Firebase connectivity test: SUCCESS");
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("Feedback", "Firebase connectivity test: FAILED - " + e.getMessage());
+                });
+            
+            // Test a simple write to verify write permissions
+            Map<String, Object> testData = new HashMap<>();
+            testData.put("test", "connectivity");
+            testData.put("timestamp", System.currentTimeMillis());
+            
+            db.collection("test").document("connectivity_test").set(testData)
+                .addOnSuccessListener(aVoid -> {
+                    Log.d("Feedback", "Firebase write test: SUCCESS");
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("Feedback", "Firebase write test: FAILED - " + e.getMessage());
+                });
+            
             // Setup rating bar
             RatingBar ratingBar = view.findViewById(R.id.ratingBar);
             ratingBar.setOnRatingBarChangeListener((rBar, rating, fromUser) -> {
@@ -232,21 +293,22 @@ public class SupportFeedbackActivity extends AppCompatActivity {
                 updateRatingText(view, rating);
             });
             
-            // Setup feedback type radio buttons
-            view.findViewById(R.id.radioSuggestion).setOnClickListener(v -> feedbackType = "suggestion");
-            view.findViewById(R.id.radioBug).setOnClickListener(v -> feedbackType = "bug");
-            view.findViewById(R.id.radioCompliment).setOnClickListener(v -> feedbackType = "compliment");
             
             // Setup anonymous switch
             view.findViewById(R.id.anonymousSwitch).setOnClickListener(v -> 
                 isAnonymous = ((com.google.android.material.switchmaterial.SwitchMaterial) v).isChecked()
             );
             
-            // Initialize submit button
+            // Add debug test button
             view.findViewById(R.id.submitFeedbackButton).setOnClickListener(v -> {
+                // First, let's test Firebase connectivity
+                testFirebaseConnection();
+                
+                // Then proceed with normal feedback submission
                 EditText feedbackInput = view.findViewById(R.id.feedbackInput);
                 String feedback = feedbackInput.getText().toString().trim();
                 
+                // Validation
                 if (userRating == 0) {
                     Toast.makeText(getContext(), "Please rate your experience", Toast.LENGTH_SHORT).show();
                     return;
@@ -254,20 +316,44 @@ public class SupportFeedbackActivity extends AppCompatActivity {
                 
                 if (TextUtils.isEmpty(feedback)) {
                     feedbackInput.setError("Please enter your feedback");
+                    feedbackInput.requestFocus();
                     return;
                 }
                 
+                if (feedback.length() < 10) {
+                    feedbackInput.setError("Please provide more detailed feedback (at least 10 characters)");
+                    feedbackInput.requestFocus();
+                    return;
+                }
+                
+                // Clear any previous errors
+                feedbackInput.setError(null);
+                
+                // Check user authentication before saving
+                FirebaseAuth mAuth = FirebaseAuth.getInstance();
+                FirebaseUser currentUser = mAuth.getCurrentUser();
+                
+                if (currentUser == null) {
+                    Log.e("Feedback", "❌ USER NOT LOGGED IN - Cannot save feedback");
+                    Toast.makeText(getContext(), "Please log in first to submit feedback", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                
+                Log.d("Feedback", "✅ USER LOGGED IN - UID: " + currentUser.getUid() + ", Email: " + currentUser.getEmail());
+                
                 // Save feedback to Firebase
+                Log.d("Feedback", "About to save feedback: rating=" + userRating + ", feedback=" + feedback + ", anonymous=" + isAnonymous);
                 saveFeedback(feedback);
                 
                 // Clear form
                 feedbackInput.setText("");
                 ratingBar.setRating(0);
                 userRating = 0;
+                isAnonymous = false;
+                ((com.google.android.material.switchmaterial.SwitchMaterial) view.findViewById(R.id.anonymousSwitch)).setChecked(false);
                 updateRatingText(view, 0);
                 
-                // Show success message
-                Toast.makeText(getContext(), "Thank you for your feedback!", Toast.LENGTH_LONG).show();
+                // Success message will be shown in saveFeedback method
             });
         }
         
@@ -282,28 +368,126 @@ public class SupportFeedbackActivity extends AppCompatActivity {
         
         private void saveFeedback(String feedback) {
             FirebaseAuth mAuth = FirebaseAuth.getInstance();
-            String userId = isAnonymous ? "anonymous" : 
-                (mAuth.getCurrentUser() != null ? mAuth.getCurrentUser().getUid() : "anonymous");
+            FirebaseUser currentUser = mAuth.getCurrentUser();
+            
+            Log.d("Feedback", "=== FEEDBACK SAVE START ===");
+            Log.d("Feedback", "Current user: " + (currentUser != null ? currentUser.getUid() : "null"));
+            Log.d("Feedback", "User email: " + (currentUser != null ? currentUser.getEmail() : "null"));
+            Log.d("Feedback", "Is anonymous: " + isAnonymous);
+            Log.d("Feedback", "Rating: " + userRating);
+            Log.d("Feedback", "Feedback text: " + feedback);
+            
+            // Always use the authenticated user's information, even if anonymous is selected
+            // The anonymous flag is just for display purposes
+            String userId = currentUser != null ? currentUser.getUid() : "anonymous";
+            String userEmail = currentUser != null ? currentUser.getEmail() : "anonymous";
+            
+            // If user wants to submit anonymously, we'll mask the email in the feedback data
+            if (isAnonymous && currentUser != null) {
+                userEmail = "anonymous_user_" + userId.substring(0, Math.min(8, userId.length()));
+            }
+            
+            Log.d("Feedback", "Final userId: " + userId + ", userEmail: " + userEmail);
             
             Map<String, Object> feedbackData = new HashMap<>();
             feedbackData.put("userId", userId);
+            feedbackData.put("userEmail", userEmail);
             feedbackData.put("rating", userRating);
             feedbackData.put("feedback", feedback);
-            feedbackData.put("type", feedbackType);
+            feedbackData.put("type", "general"); // Simplified to general feedback
             feedbackData.put("isAnonymous", isAnonymous);
             feedbackData.put("timestamp", System.currentTimeMillis());
+            feedbackData.put("status", "new");
+            feedbackData.put("appVersion", "1.0.0");
+            feedbackData.put("priority", "low");
+            feedbackData.put("category", "user_feedback");
+            feedbackData.put("testId", "NEW_TEST_" + System.currentTimeMillis()); // Unique test identifier
+            feedbackData.put("submissionTime", new java.util.Date().toString()); // Human readable time
+            
+            Log.d("Feedback", "Attempting to save to Firebase collection 'feedback'");
+            Log.d("Feedback", "Feedback data: " + feedbackData.toString());
+            Log.d("Feedback", "Firestore instance: " + (db != null ? "OK" : "NULL"));
+            
+            if (db == null) {
+                Log.e("Feedback", "FirebaseFirestore instance is null! Initializing...");
+                db = FirebaseFirestore.getInstance();
+                Log.d("Feedback", "Re-initialized Firestore: " + (db != null ? "OK" : "STILL NULL"));
+                
+                if (db == null) {
+                    Log.e("Feedback", "Failed to initialize FirebaseFirestore!");
+                    if (getContext() != null) {
+                        Toast.makeText(getContext(), "Database connection error. Please try again.", Toast.LENGTH_LONG).show();
+                    }
+                    return;
+                }
+            }
+            
+            // Create unique document ID for each feedback submission
+            String feedbackDocId = userId + "_" + System.currentTimeMillis();
+
+            Log.d("Feedback", "Saving to document ID: " + feedbackDocId);
             
             db.collection("feedback")
                 .add(feedbackData)
                 .addOnSuccessListener(documentReference -> {
-                    // Success, already handled in the click listener
+                    Log.d("Feedback", "Feedback saved successfully with ID: " + documentReference.getId());
+                    Log.d("Feedback", "Document data: " + feedbackData.toString());
+                    if (getContext() != null) {
+                        Toast.makeText(getContext(), "Feedback submitted successfully!", Toast.LENGTH_SHORT).show();
+                    }
                 })
                 .addOnFailureListener(e -> {
-                    // Error handling
+                    Log.e("Feedback", "Error saving feedback to Firebase", e);
+                    Log.e("Feedback", "Failed data: " + feedbackData.toString());
                     if (getContext() != null) {
-                        Toast.makeText(getContext(), "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        Toast.makeText(getContext(), "Error submitting feedback: " + e.getMessage(), Toast.LENGTH_LONG).show();
                     }
                 });
+        }
+        
+        private void testFirebaseConnection() {
+            Log.d("Feedback", "=== FIREBASE CONNECTION TEST ===");
+            
+            try {
+                // Test 1: Check Firebase Auth
+                FirebaseAuth mAuth = FirebaseAuth.getInstance();
+                FirebaseUser currentUser = mAuth.getCurrentUser();
+                Log.d("Feedback", "Firebase Auth - Current User: " + (currentUser != null ? currentUser.getUid() : "NULL"));
+                Log.d("Feedback", "Firebase Auth - User Email: " + (currentUser != null ? currentUser.getEmail() : "NULL"));
+                
+                // Test 2: Check Firestore
+                FirebaseFirestore db = FirebaseFirestore.getInstance();
+                Log.d("Feedback", "Firestore Instance: " + (db != null ? "OK" : "NULL"));
+                
+                // Test 3: Simple write test with minimal data
+                Map<String, Object> testData = new HashMap<>();
+                testData.put("test", "simple_test");
+                testData.put("timestamp", System.currentTimeMillis());
+                testData.put("message", "Hello Firebase!");
+                
+                Log.d("Feedback", "Attempting to write test data...");
+                
+                db.collection("debug_test").add(testData)
+                    .addOnSuccessListener(documentReference -> {
+                        Log.d("Feedback", "✅ FIREBASE WRITE TEST: SUCCESS - Document ID: " + documentReference.getId());
+                        if (getContext() != null) {
+                            Toast.makeText(getContext(), "Firebase: SUCCESS! Check debug_test collection", Toast.LENGTH_LONG).show();
+                        }
+                    })
+                    .addOnFailureListener(e -> {
+                        Log.e("Feedback", "❌ FIREBASE WRITE TEST: FAILED - " + e.getMessage());
+                        Log.e("Feedback", "Error details: " + e.toString());
+                        if (getContext() != null) {
+                            Toast.makeText(getContext(), "Firebase FAILED: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        }
+                    });
+                    
+            } catch (Exception e) {
+                Log.e("Feedback", "❌ EXCEPTION in Firebase test: " + e.getMessage());
+                if (getContext() != null) {
+                    Toast.makeText(getContext(), "Exception: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                }
+            }
         }
     }
 } 

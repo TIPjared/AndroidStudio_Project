@@ -86,7 +86,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:backgroundTint="#2a8743"
-            android:text="Login" />
+            android:text="Login"
+            android:textColor="#FFFFFF" />
 
         <Button
             android:id="@+id/signuplanding"
@@ -94,6 +95,7 @@
             android:layout_height="wrap_content"
             android:text="Sign Up"
             android:backgroundTint="#0e4721"
+            android:textColor="#FFFFFF"
             android:layout_marginStart="16dp" />
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

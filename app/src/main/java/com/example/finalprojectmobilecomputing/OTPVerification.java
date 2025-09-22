@@ -136,7 +136,7 @@ public class OTPVerification extends AppCompatActivity {
         String phone = normalizePhone(phoneFromDb);
 
         OkHttpClient client = new OkHttpClient();
-        String url = "https://sikad-otp-server.onrender.com/otp/start";
+        String url = getString(R.string.otp_base_url) + "/otp/start";
 
         String json = "{ \"phone\": \"" + phone + "\" }";
         RequestBody body = RequestBody.create(
@@ -186,7 +186,7 @@ public class OTPVerification extends AppCompatActivity {
             String idToken = result.getToken();
 
             OkHttpClient client = new OkHttpClient();
-            String url = "https://sikad-otp-server.onrender.com/otp/check";
+            String url = getString(R.string.otp_base_url) + "/otp/check";
 
             String json = "{ \"phone\": \"" + phone + "\", \"code\": \"" + code + "\" }";
             Request request = new Request.Builder()

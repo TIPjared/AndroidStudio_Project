@@ -209,12 +209,16 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="16dp"
                     android:hint="@string/your_name"
-                    app:startIconDrawable="@drawable/baseline_person_outline_24">
+                    app:startIconDrawable="@drawable/baseline_person_outline_24"
+                    app:boxStrokeColor="#4CAF50"
+                    app:hintTextColor="#4CAF50">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/nameInput"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content" />
+                        android:layout_height="wrap_content"
+                        android:textColor="#212121"
+                        android:textColorHint="#757575" />
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <com.google.android.material.textfield.TextInputLayout
@@ -223,13 +227,17 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="16dp"
                     android:hint="@string/your_email"
-                    app:startIconDrawable="@android:drawable/ic_dialog_email">
+                    app:startIconDrawable="@android:drawable/ic_dialog_email"
+                    app:boxStrokeColor="#4CAF50"
+                    app:hintTextColor="#4CAF50">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/emailInput"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="textEmailAddress" />
+                        android:inputType="textEmailAddress"
+                        android:textColor="#212121"
+                        android:textColorHint="#757575" />
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <com.google.android.material.textfield.TextInputLayout
@@ -237,7 +245,9 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="20dp"
-                    android:hint="@string/your_issue">
+                    android:hint="@string/your_issue"
+                    app:boxStrokeColor="#4CAF50"
+                    app:hintTextColor="#4CAF50">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/issueInput"
@@ -245,7 +255,9 @@
                         android:layout_height="wrap_content"
                         android:gravity="top"
                         android:inputType="textMultiLine"
-                        android:lines="4" />
+                        android:lines="4"
+                        android:textColor="#212121"
+                        android:textColorHint="#757575" />
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <com.google.android.material.button.MaterialButton

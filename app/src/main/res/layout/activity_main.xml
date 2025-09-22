@@ -156,6 +156,7 @@
                     android:inputType="textPassword"
                     android:textSize="@dimen/body_text_size"
                     android:padding="@dimen/margin_small"
+                    android:textColor="#000000"
                     android:textCursorDrawable="@drawable/cursor_green"
                     android:textSelectHandle="@drawable/text_select_handle_green"
                     android:textSelectHandleLeft="@drawable/text_select_handle_left_green"
