@@ -20,6 +20,8 @@ import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
+import androidx.appcompat.app.AlertDialog;
+import android.content.SharedPreferences;
 
 import com.google.android.gms.location.Geofence;
 import com.google.android.gms.location.GeofencingRequest;
@@ -56,11 +58,11 @@ import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.material.navigation.NavigationView;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
-import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.SetOptions;
 
 import java.util.ArrayList;
@@ -91,8 +93,9 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
     private boolean transactionAuthorized = false;
 
-    // Firebase Database reference
-    private DatabaseReference rideLogsRef;
+    // Firebase references - Realtime Database for GPS data, Firestore for user profiles
+    private DatabaseReference rideLogsRef; // For GPS data in Realtime Database
+    private FirebaseFirestore firestore; // For user profiles in Firestore
     private TextView distanceTextView, timerTextView, elapsedTimeTextView;;
     private float totalDistance = 0f;
     private Location previousLocation;
@@ -131,8 +134,9 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
         // XML layout already handles the icon positioning for proper centering
 
-        // Firebase reference for logging rides
-        rideLogsRef = FirebaseDatabase.getInstance().getReference("rideLogs");
+        // Firebase references - Realtime Database for GPS data, Firestore for user profiles
+        rideLogsRef = FirebaseDatabase.getInstance().getReference("rideLogs"); // GPS data
+        firestore = FirebaseFirestore.getInstance(); // User profiles and feedback
 
         // Initially hide route controls
         stopButton.setVisibility(View.GONE);
@@ -148,14 +152,13 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             }
         });
         navigationView.setNavigationItemSelectedListener(item -> {
+            Intent intent;
             if (item.getItemId() == R.id.nav_history) {
                 startActivity(new Intent(MainPage.this, RideHistoryActivity.class));
             } else if (item.getItemId() == R.id.nav_support) {
                 startActivity(new Intent(MainPage.this, SupportFeedbackActivity.class));
-            } else if (item.getItemId() == R.id.nav_logout) {
-                FirebaseAuth.getInstance().signOut();
-                startActivity(new Intent(MainPage.this, LandingPage.class));
-                finish();
+            } else if (item.getItemId() == R.id.nav_about) {
+                showAboutSikadPopup();
             }
             drawerLayout.closeDrawers();
             return true;
@@ -316,6 +319,56 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         if (drawerLayout.isDrawerOpen(navigationView)) {
             drawerLayout.closeDrawer(navigationView);
         }
+    }
+
+
+    // Method to show About Sikad popup
+    private void showAboutSikadPopup() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("About SIKAD");
+        
+        String aboutContent = "SIKAD\n" +
+                "A Free-Roam IoT-based Bike Rental System\n" +
+                "with Geofencing and SMS-based Alerts\n\n" +
+                
+                "Our Mission:\n" +
+                "To provide sustainable, affordable, and smart transportation solutions through our innovative IoT-based bike rental platform.\n\n" +
+                
+                "Key Features:\n" +
+                "• Real-time GPS tracking\n" +
+                "• Unique ESP32 Bike IDs\n" +
+                "• GCash QR payments on each bike\n" +
+                "• Secure token-based system\n" +
+                "• Server-based bike search\n" +
+                "• WiFi-enabled smart bikes\n" +
+                "• Geofencing technology\n" +
+                "• SMS-based alert system\n" +
+                "• Free-roam rental system\n\n" +
+                
+                "Hardware & Technology:\n" +
+                "• ESP32 microcontroller with WiFi\n" +
+                "• Real-time GPS modules\n" +
+                "• Integrated QR code scanner\n" +
+                "• Token-based security protocol\n" +
+                "• Downlink command communication\n" +
+                "• Geofencing boundary detection\n" +
+                "• SMS alert notifications\n" +
+                "• IoT-based monitoring system\n\n" +
+                
+                "Geofencing System:\n" +
+                "Our bikes use advanced geofencing to ensure they stay within designated areas and provide alerts when boundaries are crossed.\n\n" +
+                
+                "© 2025 Sikad - IoT Bike Rental System\n" +
+                "Made in the Philippines";
+        
+        builder.setMessage(aboutContent);
+        builder.setPositiveButton("Awesome!", null);
+        builder.setNeutralButton("Contact Us", (dialog, which) -> {
+            startActivity(new Intent(MainPage.this, SupportFeedbackActivity.class));
+        });
+        
+        AlertDialog dialog = builder.create();
+        dialog.show();
     }
 
     @Override
@@ -780,44 +833,111 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         });
     }
 
+    // Cache user data to avoid repeated Firebase calls
+    public static String cachedUsername = "";
+    public static String cachedPhone = "";
+    public static String cachedProfileImageUrl = "";
+    public static String cachedEmail = "";
+    public static boolean dataLoaded = false;
+
     private void loadUserProfileData(View headerView) {
         TextView profileName = headerView.findViewById(R.id.profileName);
         TextView profileEmail = headerView.findViewById(R.id.profileEmail);
+        TextView profilePhone = headerView.findViewById(R.id.profilePhone);
         ImageView profileImage = headerView.findViewById(R.id.profileImage);
         
         // Get current Firebase user
         FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        Log.d("MainPage", "Loading user profile data. Current user: " + (currentUser != null ? currentUser.getUid() : "null"));
+        
         if (currentUser != null && currentUser.getEmail() != null) {
-            // Set email from Firebase Auth
-            profileEmail.setText(currentUser.getEmail());
             
-            // Get username from Firestore
-            FirebaseFirestore db = FirebaseFirestore.getInstance();
-            db.collection("users").document(currentUser.getUid())
-                .get()
-                .addOnSuccessListener(documentSnapshot -> {
-                    if (documentSnapshot.exists()) {
-                        String username = documentSnapshot.getString("username");
-                        String profileImageUrl = documentSnapshot.getString("profileImageUrl");
-                        
-                        if (username != null && !username.isEmpty()) {
-                            profileName.setText(username);
+            // Load cached data immediately for instant display
+            if (dataLoaded) {
+                profileEmail.setText(cachedEmail);
+                profileName.setText(cachedUsername.isEmpty() ? "User Name" : cachedUsername);
+                profilePhone.setText(cachedPhone.isEmpty() ? "Phone not set" : cachedPhone);
+                
+                // Load cached profile image
+                if (!cachedProfileImageUrl.isEmpty()) {
+                    com.squareup.picasso.Picasso.get()
+                        .load(cachedProfileImageUrl)
+                        .placeholder(R.drawable.baseline_person_outline_24)
+                        .error(R.drawable.baseline_person_outline_24)
+                        .into(profileImage);
+                }
+            } else {
+                // Set email from Firebase Auth immediately
+                cachedEmail = currentUser.getEmail();
+                profileEmail.setText(cachedEmail);
+            }
+            
+            // Only fetch from Firebase if we don't have cached data or need to refresh
+            if (!dataLoaded) {
+                Log.d("MainPage", "Fetching user data from Firestore for user: " + currentUser.getUid());
+                FirebaseFirestore db = FirebaseFirestore.getInstance();
+                db.collection("users").document(currentUser.getUid())
+                    .get()
+                    .addOnSuccessListener(documentSnapshot -> {
+                        Log.d("MainPage", "Firestore query successful. Document exists: " + documentSnapshot.exists());
+                        if (documentSnapshot.exists()) {
+                            String username = documentSnapshot.getString("username");
+                            String phone = documentSnapshot.getString("phone");
+                            String profileImageUrl = documentSnapshot.getString("profileImageUrl");
+                            
+                            Log.d("MainPage", "Retrieved data - username: " + username + ", phone: " + phone + ", imageUrl: " + profileImageUrl);
+                            
+                            // Cache the data
+                            cachedUsername = username != null ? username : "";
+                            cachedPhone = phone != null ? phone : "";
+                            cachedProfileImageUrl = profileImageUrl != null ? profileImageUrl : "";
+                            dataLoaded = true;
+                            
+                            // Update UI with fresh data
+                            profileName.setText(cachedUsername.isEmpty() ? "User Name" : cachedUsername);
+                            profilePhone.setText(cachedPhone.isEmpty() ? "Phone not set" : cachedPhone);
+                            
+                            Log.d("MainPage", "Updated UI with cached data");
+                            
+                            // Load profile image
+                            if (!cachedProfileImageUrl.isEmpty()) {
+                                com.squareup.picasso.Picasso.get()
+                                    .load(cachedProfileImageUrl)
+                                    .placeholder(R.drawable.baseline_person_outline_24)
+                                    .error(R.drawable.baseline_person_outline_24)
+                                    .into(profileImage);
+                            }
+                        } else {
+                            Log.d("MainPage", "User document does not exist in Firestore");
+                            dataLoaded = true; // Mark as loaded to prevent repeated attempts
                         }
-                        
-                        // Load profile image if it exists
-                        if (profileImageUrl != null && !profileImageUrl.isEmpty()) {
-                            // Use Picasso library to load and cache the image
-                            com.squareup.picasso.Picasso.get()
-                                .load(profileImageUrl)
-                                .placeholder(R.drawable.baseline_person_outline_24)
-                                .error(R.drawable.baseline_person_outline_24)
-                                .into(profileImage);
-                        }
-                    }
-                })
-                .addOnFailureListener(e -> {
-                    // In case of error, leave default text
-                });
+                    })
+                    .addOnFailureListener(e -> {
+                        Log.e("MainPage", "Error fetching user data from Firestore", e);
+                        // In case of error, leave default text
+                        dataLoaded = true; // Mark as loaded to prevent repeated attempts
+                    });
+            } else {
+                Log.d("MainPage", "Using cached data, dataLoaded: " + dataLoaded);
+            }
+        }
+    }
+
+    // Method to refresh cache when profile data is updated
+    public static void refreshUserCache() {
+        dataLoaded = false;
+        cachedUsername = "";
+        cachedPhone = "";
+        cachedProfileImageUrl = "";
+        cachedEmail = "";
+    }
+
+    // Method to force refresh navigation header data
+    public void refreshNavigationHeader() {
+        refreshUserCache();
+        View headerView = navigationView.getHeaderView(0);
+        if (headerView != null) {
+            loadUserProfileData(headerView);
         }
     }
 
@@ -825,9 +945,8 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     protected void onResume() {
         super.onResume();
         
-        // Refresh user profile data in navigation header when returning to this screen
-        View headerView = navigationView.getHeaderView(0);
-        loadUserProfileData(headerView);
+        // Force refresh navigation header data when returning to the page
+        refreshNavigationHeader();
     }
 }
 

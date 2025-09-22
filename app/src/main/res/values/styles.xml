@@ -47,4 +47,12 @@
         <item name="colorControlActivated">@color/sikad_green</item>
         <item name="colorControlHighlight">@color/sikad_green_light</item>
     </style>
+    
+    <!-- Enhanced Navigation Drawer Text Style -->
+    <style name="NavigationDrawerTextStyle" parent="Widget.MaterialComponents.NavigationView">
+        <item name="android:textSize">16sp</item>
+        <item name="android:textStyle">normal</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">#FFFFFF</item>
+    </style>
 </resources> 

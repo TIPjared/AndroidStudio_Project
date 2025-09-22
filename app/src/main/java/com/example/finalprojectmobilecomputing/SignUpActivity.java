@@ -3,6 +3,7 @@ package com.example.finalprojectmobilecomputing;
 import android.content.Intent;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -168,6 +169,11 @@ public class SignUpActivity extends AppCompatActivity {
                                             newUser.put("phone", phone);
                                             newUser.put("deviceId", null);
                                             newUser.put("phoneVerified", false);
+                                            newUser.put("username", "");
+                                            newUser.put("age", "");
+                                            newUser.put("gender", "");
+                                            newUser.put("profileImageUrl", "");
+                                            newUser.put("createdAt", System.currentTimeMillis());
 
                                             db.collection("users").document(userId)
                                                     .set(newUser)
@@ -213,7 +219,9 @@ public class SignUpActivity extends AppCompatActivity {
                 GoogleSignInAccount account = task.getResult(ApiException.class);
                 firebaseAuthWithGoogle(account.getIdToken());
             } catch (ApiException e) {
-                Toast.makeText(this, "Google Sign-Up failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                String errorMessage = "Google Sign-Up failed: " + e.getStatusCode() + " - " + e.getMessage();
+                Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show();
+                Log.e("GoogleSignIn", "Sign-in failed with code: " + e.getStatusCode(), e);
             }
         }
     }
@@ -229,7 +237,18 @@ public class SignUpActivity extends AppCompatActivity {
 
                         // Create a user entry in Firestore (without phone initially)
                         FirebaseFirestore db = FirebaseFirestore.getInstance();
-                        db.collection("users").document(userId).set(new UserModel(email, ""))
+                        Map<String, Object> newUser = new HashMap<>();
+                        newUser.put("email", email);
+                        newUser.put("phone", "");
+                        newUser.put("deviceId", null);
+                        newUser.put("phoneVerified", false);
+                        newUser.put("username", "");
+                        newUser.put("age", "");
+                        newUser.put("gender", "");
+                        newUser.put("profileImageUrl", "");
+                        newUser.put("createdAt", System.currentTimeMillis());
+                        
+                        db.collection("users").document(userId).set(newUser)
                                 .addOnSuccessListener(aVoid -> {
                                     // Navigate to OTP verification to collect phone number
                                     Intent intent = new Intent(SignUpActivity.this, OTPVerification.class);

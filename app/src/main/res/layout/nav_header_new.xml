@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/nav_header_gradient_new"
+    android:paddingStart="24dp"
+    android:paddingTop="56dp"
+    android:paddingEnd="24dp"
+    android:paddingBottom="24dp">
+
+    <!-- Animated Background Elements -->
+    <View
+        android:id="@+id/animatedCircle1"
+        android:layout_width="120dp"
+        android:layout_height="120dp"
+        android:background="@drawable/circle_gradient_1"
+        android:alpha="0.3"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        android:layout_marginTop="-40dp"
+        android:layout_marginEnd="-20dp" />
+
+    <View
+        android:id="@+id/animatedCircle2"
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:background="@drawable/circle_gradient_2"
+        android:alpha="0.2"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        android:layout_marginStart="-30dp"
+        android:layout_marginBottom="-20dp" />
+
+    <!-- Profile Container with Enhanced Design -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/profileContainer"
+        android:layout_width="100dp"
+        android:layout_height="100dp"
+        app:cardCornerRadius="50dp"
+        app:cardElevation="12dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackgroundBorderless"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        android:scaleType="centerCrop">
+
+        <!-- Simple Profile Image -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <ImageView
+                android:id="@+id/profileImage"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:src="@drawable/baseline_person_outline_24"
+                android:contentDescription="@string/user_name"
+                android:padding="8dp" />
+        </FrameLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- User Info with Enhanced Typography -->
+    <TextView
+        android:id="@+id/profileName"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:text="User Name"
+        android:textColor="#FFFFFF"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:fontFamily="sans-serif-medium"
+        android:shadowColor="#80000000"
+        android:shadowDx="1"
+        android:shadowDy="1"
+        android:shadowRadius="2"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/profileContainer" />
+
+    <TextView
+        android:id="@+id/profileEmail"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="user@email.com"
+        android:textColor="#E8F5E9"
+        android:textSize="16sp"
+        android:fontFamily="sans-serif"
+        android:drawableStart="@drawable/mail"
+        android:drawablePadding="8dp"
+        android:drawableTint="#E8F5E9"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="@id/profileName"
+        app:layout_constraintTop_toBottomOf="@id/profileName" />
+
+    <TextView
+        android:id="@+id/profilePhone"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="@string/user_phone"
+        android:textColor="#E8F5E9"
+        android:textSize="14sp"
+        android:fontFamily="sans-serif"
+                android:drawableStart="@drawable/baseline_sms_24"
+        android:drawablePadding="8dp"
+        android:drawableTint="#E8F5E9"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="@id/profileName"
+        app:layout_constraintTop_toBottomOf="@id/profileEmail" />
+
+    <!-- Online Status Text -->
+    <TextView
+        android:id="@+id/onlineStatusText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="● Online"
+        android:textColor="#4CAF50"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:fontFamily="sans-serif-medium"
+        android:shadowColor="#80000000"
+        android:shadowDx="1"
+        android:shadowDy="1"
+        android:shadowRadius="2"
+        app:layout_constraintStart_toStartOf="@id/profileName"
+        app:layout_constraintTop_toBottomOf="@id/profilePhone" />
+
+    <!-- Enhanced View Profile Button -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/profileLink"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:layout_marginBottom="8dp"
+        android:backgroundTint="#FFFFFF"
+        android:textColor="#2E7D32"
+        android:text="VIEW PROFILE"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:fontFamily="sans-serif-medium"
+        app:cornerRadius="25dp"
+        app:elevation="4dp"
+        app:icon="@drawable/baseline_edit_24"
+        app:iconTint="#2E7D32"
+        app:iconGravity="textStart"
+        app:iconPadding="8dp"
+        android:onClick="goToProfile"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/onlineStatusText"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+    <!-- Quick Stats Cards -->
+    <LinearLayout
+        android:id="@+id/quickStatsContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:orientation="horizontal"
+        android:weightSum="3"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/profileLink">
+
+        <!-- Total Rides Card -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="6dp"
+            app:cardBackgroundColor="#FFFFFF"
+            android:alpha="0.9">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp"
+                android:gravity="center">
+
+                <TextView
+                    android:id="@+id/totalRidesText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0"
+                    android:textColor="#2E7D32"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:fontFamily="sans-serif-medium" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Rides"
+                    android:textColor="#666666"
+                    android:textSize="12sp"
+                    android:fontFamily="sans-serif" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- Total Distance Card -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="6dp"
+            app:cardBackgroundColor="#FFFFFF"
+            android:alpha="0.9">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp"
+                android:gravity="center">
+
+                <TextView
+                    android:id="@+id/totalDistanceText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0.0"
+                    android:textColor="#2E7D32"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:fontFamily="sans-serif-medium" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="km"
+                    android:textColor="#666666"
+                    android:textSize="12sp"
+                    android:fontFamily="sans-serif" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- Status Card -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="6dp"
+            app:cardBackgroundColor="#FFFFFF"
+            android:alpha="0.9">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp"
+                android:gravity="center">
+
+                <TextView
+                    android:id="@+id/currentStatusText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Ready"
+                    android:textColor="#2E7D32"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:fontFamily="sans-serif-medium" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Status"
+                    android:textColor="#666666"
+                    android:textSize="12sp"
+                    android:fontFamily="sans-serif" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
