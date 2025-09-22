@@ -947,6 +947,25 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         
         // Force refresh navigation header data when returning to the page
         refreshNavigationHeader();
+        
+        // Refresh user profile data in navigation header when returning to this screen
+        View headerView = navigationView.getHeaderView(0);
+        loadUserProfileData(headerView);
+
+        currentUserId = FirebaseAuth.getInstance().getCurrentUser() != null
+                ? FirebaseAuth.getInstance().getCurrentUser().getUid()
+                : null;
+
+        listenToBikeStatus();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (bikeListener != null) {
+            bikeListener.remove();
+            bikeListener = null;
+        }
     }
 }
 
