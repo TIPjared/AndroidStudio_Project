@@ -107,6 +107,11 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     private LocationCallback locationCallback;
     private CountDownTimer countDownTimer;
     private CardView locationCard;
+    
+    // Bike status tracking variables
+    private String currentUserId;
+    private com.google.firebase.database.ValueEventListener bikeListener;
+    private com.google.firebase.database.DatabaseReference bikeStatusRef;
 
 
     @Override
@@ -959,12 +964,44 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         listenToBikeStatus();
     }
 
+    // Listen to bike status changes in Firebase Realtime Database
+    private void listenToBikeStatus() {
+        if (currentUserId == null) {
+            Log.d("MainPage", "No current user ID, skipping bike status listener");
+            return;
+        }
+        
+        // Listen to bike status for the current user
+        bikeStatusRef = FirebaseDatabase.getInstance()
+            .getReference("bikeStatus")
+            .child(currentUserId);
+            
+        bikeListener = new com.google.firebase.database.ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull com.google.firebase.database.DataSnapshot snapshot) {
+                if (snapshot.exists()) {
+                    String status = snapshot.getValue(String.class);
+                    Log.d("MainPage", "Bike status updated: " + status);
+                    // Handle bike status changes here if needed
+                }
+            }
+            
+            @Override
+            public void onCancelled(@NonNull com.google.firebase.database.DatabaseError error) {
+                Log.e("MainPage", "Bike status listener cancelled: " + error.getMessage());
+            }
+        };
+        
+        bikeStatusRef.addValueEventListener(bikeListener);
+    }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (bikeListener != null) {
-            bikeListener.remove();
+        if (bikeListener != null && bikeStatusRef != null) {
+            bikeStatusRef.removeEventListener(bikeListener);
             bikeListener = null;
+            bikeStatusRef = null;
         }
     }
 }
