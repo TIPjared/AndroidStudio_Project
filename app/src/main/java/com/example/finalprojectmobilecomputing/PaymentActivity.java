@@ -10,6 +10,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import java.util.HashMap;
 import java.util.Map;
 
+import okhttp3.Credentials;
 import okhttp3.OkHttpClient;
 import okhttp3.logging.HttpLoggingInterceptor;
 import retrofit2.Call;
@@ -24,12 +25,6 @@ import retrofit2.http.POST;
 import retrofit2.http.Query;
 
 public class PaymentActivity extends AppCompatActivity {
-
-    interface ServerApi {
-        @GET("generate-token")
-        Call<Map<String, String>> getToken(@Query("bikeId") String bikeId,
-                                           @Query("qrCode") String qrCode);
-    }
 
     interface PayMongoApi {
 

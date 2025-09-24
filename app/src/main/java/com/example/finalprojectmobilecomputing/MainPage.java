@@ -497,14 +497,14 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             if ("myapp".equals(data.getScheme()) && "main".equals(data.getHost())) {
                 String status = data.getQueryParameter("payment_status"); // updated to match server
                 if ("success".equals(status)) {
-                    paymentSuccess = true;
+                    transactionAuthorized = true;
                 }
             }
             // HTTP redirect from sikad-static.onrender.com
             else if (data.toString().contains("sikad-static.onrender.com")) {
                 String paymentParam = data.getQueryParameter("payment");
                 if ("success".equals(paymentParam)) {
-                    paymentSuccess = true;
+                    transactionAuthorized = true;
                     Toast.makeText(this, "Payment successful!", Toast.LENGTH_SHORT).show();
                 }
             }
