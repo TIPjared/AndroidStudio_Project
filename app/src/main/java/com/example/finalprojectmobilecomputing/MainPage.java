@@ -112,6 +112,9 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     private String currentUserId;
     private com.google.firebase.database.ValueEventListener bikeListener;
     private com.google.firebase.database.DatabaseReference bikeStatusRef;
+    
+    // Emergency alert system
+    private EmergencyAlertDialog emergencyAlert;
 
 
     @Override
