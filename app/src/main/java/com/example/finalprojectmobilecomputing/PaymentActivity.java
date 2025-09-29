@@ -27,9 +27,7 @@ import retrofit2.http.Query;
 public class PaymentActivity extends AppCompatActivity {
 
     interface PayMongoApi {
-
         @Headers({"Content-Type: application/json"})
-
         @POST("sources")
         Call<Map<String, Object>> createSource(@Body Map<String, Object> body);
     }
@@ -43,7 +41,6 @@ public class PaymentActivity extends AppCompatActivity {
         );
     }
 
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -54,7 +51,6 @@ public class PaymentActivity extends AppCompatActivity {
 
         if (qrCode == null || userId == null) {
             Log.e("PAYMENT", "Missing qrCode or userId");
-
             finish();
             return;
         }
@@ -67,7 +63,6 @@ public class PaymentActivity extends AppCompatActivity {
         interceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
 
         OkHttpClient baseClient = new OkHttpClient.Builder()
-
                 .addInterceptor(interceptor)
                 .build();
 

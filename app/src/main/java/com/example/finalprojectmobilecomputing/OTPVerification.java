@@ -15,6 +15,9 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.auth.PhoneAuthCredential;
+import com.google.firebase.auth.PhoneAuthOptions;
+import com.google.firebase.auth.PhoneAuthProvider;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.android.material.textfield.TextInputEditText;
 
@@ -40,6 +43,11 @@ public class OTPVerification extends AppCompatActivity {
     private String phoneNumber;
     private String userId;
     private CountDownTimer resendTimer;
+    
+    // Firebase Phone Auth variables
+    private String verificationId;
+    private PhoneAuthProvider.ForceResendingToken resendToken;
+    private PhoneAuthProvider.OnVerificationStateChangedCallbacks mCallbacks;
 
     // Constants for rate limiting
     private static final String PREFS_NAME = "OTPVerificationPrefs";
@@ -88,6 +96,9 @@ public class OTPVerification extends AppCompatActivity {
             finish();
             return;
         }
+        
+        // 📤 Send initial OTP
+        sendOtpWithFirebase(phoneNumber);
 
         // ✅ Step 2: Verify OTP
         verifyOtpButton.setOnClickListener(v -> {
@@ -96,14 +107,14 @@ public class OTPVerification extends AppCompatActivity {
                 Toast.makeText(this, "Enter OTP first", Toast.LENGTH_SHORT).show();
                 return;
             }
-            verifyOtpWithTwilio(phoneNumber, code, userId);
+            verifyOtpWithFirebase(code);
         });
 
         // ✅ Step 3: Resend OTP
         resendOtpButton.setOnClickListener(v -> {
             if (phoneNumber != null && !phoneNumber.isEmpty()) {
                 if (canSendVerification()) {
-                    sendOtpWithTwilio(phoneNumber); // 🔁 Call Twilio again
+                    sendOtpWithFirebase(phoneNumber); // 🔁 Call Firebase again
                 } else {
                     showCooldownMessage();
                 }
@@ -127,48 +138,54 @@ public class OTPVerification extends AppCompatActivity {
     }
 
 
-    // 📤 Send OTP with Twilio backend
-    private void sendOtpWithTwilio(String phoneFromDb) {
+    // 📤 Send OTP with Firebase Phone Auth
+    private void sendOtpWithFirebase(String phoneFromDb) {
         setResendButtonEnabled(false);
         Toast.makeText(this, "Sending verification code...", Toast.LENGTH_SHORT).show();
-        updateRequestCounter();
-
+        
         String phone = normalizePhone(phoneFromDb);
+        if (phone == null || phone.isEmpty()) {
+            Toast.makeText(this, "Invalid phone number", Toast.LENGTH_SHORT).show();
+            setResendButtonEnabled(true);
+            return;
+        }
+        
+        // Initialize Firebase Phone Auth callbacks
+        mCallbacks = new PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+            @Override
+            public void onVerificationCompleted(PhoneAuthCredential credential) {
+                // Auto-verification completed
+                signInWithPhoneAuthCredential(credential);
+            }
 
-        OkHttpClient client = new OkHttpClient();
-        String url = "https://sikad-otp-server.onrender.com/otp/start";
-
-        String json = "{ \"phone\": \"" + phone + "\" }";
-        RequestBody body = RequestBody.create(
-                json, okhttp3.MediaType.parse("application/json; charset=utf-8"));
-
-        Request request = new Request.Builder()
-                .url(url)
-                .post(body)
-                .build();
-
-        client.newCall(request).enqueue(new Callback() {
-            @Override public void onFailure(Call call, IOException e) {
+            @Override
+            public void onVerificationFailed(com.google.firebase.FirebaseException e) {
                 runOnUiThread(() -> {
-                    Toast.makeText(OTPVerification.this, "Failed to send OTP", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(OTPVerification.this, "Verification failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
                     setResendButtonEnabled(true);
                 });
             }
 
-            @Override public void onResponse(Call call, Response response) throws IOException {
-                final String respBody = response.body() != null ? response.body().string() : "";
-                android.util.Log.d("OTP_START", "code=" + response.code() + " body=" + respBody);
+            @Override
+            public void onCodeSent(String verificationId, PhoneAuthProvider.ForceResendingToken token) {
                 runOnUiThread(() -> {
-                    if (response.isSuccessful()) {
-                        Toast.makeText(OTPVerification.this, "OTP sent successfully!", Toast.LENGTH_SHORT).show();
-                        startResendTimer();
-                    } else {
-                        Toast.makeText(OTPVerification.this, "Error sending OTP (" + response.code() + ")", Toast.LENGTH_SHORT).show();
-                        setResendButtonEnabled(true);
-                    }
+                    OTPVerification.this.verificationId = verificationId;
+                    OTPVerification.this.resendToken = token;
+                    Toast.makeText(OTPVerification.this, "OTP sent successfully!", Toast.LENGTH_SHORT).show();
+                    startResendTimer();
                 });
             }
-        });
+        };
+        
+        // Start phone number verification
+        PhoneAuthOptions options = PhoneAuthOptions.newBuilder(mAuth)
+                .setPhoneNumber("+63" + phone) // Add country code
+                .setTimeout(60L, java.util.concurrent.TimeUnit.SECONDS)
+                .setActivity(this)
+                .setCallbacks(mCallbacks)
+                .build();
+                
+        PhoneAuthProvider.verifyPhoneNumber(options);
     }
 
 
@@ -186,7 +203,7 @@ public class OTPVerification extends AppCompatActivity {
             String idToken = result.getToken();
 
             OkHttpClient client = new OkHttpClient();
-            String url = "https://sikad-otp-server.onrender.com/otp/check";
+            String url = getString(R.string.otp_base_url) + "/otp/check";
 
             String json = "{ \"phone\": \"" + phone + "\", \"code\": \"" + code + "\" }";
             Request request = new Request.Builder()
@@ -230,6 +247,54 @@ public class OTPVerification extends AppCompatActivity {
         );
     }
 
+    // 📥 Verify OTP with Firebase Phone Auth
+    private void verifyOtpWithFirebase(String code) {
+        if (verificationId == null) {
+            Toast.makeText(this, "Please request OTP first", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        PhoneAuthCredential credential = PhoneAuthProvider.getCredential(verificationId, code);
+        signInWithPhoneAuthCredential(credential);
+    }
+    
+    // 🔐 Sign in with phone auth credential
+    private void signInWithPhoneAuthCredential(PhoneAuthCredential credential) {
+        mAuth.signInWithCredential(credential)
+                .addOnCompleteListener(this, task -> {
+                    if (task.isSuccessful()) {
+                        // Phone verification successful
+                        FirebaseUser user = task.getResult().getUser();
+                        if (user != null) {
+                            // Update user's phone verification status in Firestore
+                            updateUserPhoneVerification(user.getUid(), phoneNumber);
+                            Toast.makeText(this, "Phone verified successfully!", Toast.LENGTH_SHORT).show();
+                            
+                            // Navigate to main page
+                            Intent intent = new Intent(OTPVerification.this, MainPage.class);
+                            startActivity(intent);
+                            finish();
+                        }
+                    } else {
+                        // Verification failed
+                        Toast.makeText(this, "Invalid OTP code", Toast.LENGTH_SHORT).show();
+                    }
+                });
+    }
+    
+    // 📝 Update user phone verification status in Firestore
+    private void updateUserPhoneVerification(String userId, String phoneNumber) {
+        FirebaseFirestore.getInstance().collection("users").document(userId)
+                .update("phoneVerified", true, "phone", phoneNumber, "deviceId", 
+                        Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID))
+                .addOnCompleteListener(task -> {
+                    if (task.isSuccessful()) {
+                        android.util.Log.d("FIREBASE_UPDATE", "Phone verification status updated successfully");
+                    } else {
+                        android.util.Log.e("FIREBASE_UPDATE", "Failed to update phone verification status", task.getException());
+                    }
+                });
+    }
 
     // 📊 Rate limiting methods
     private boolean canSendVerification() {

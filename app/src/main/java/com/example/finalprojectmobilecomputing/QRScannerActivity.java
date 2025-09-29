@@ -1,7 +1,5 @@
 package com.example.finalprojectmobilecomputing;
 
-import static androidx.core.content.ContextCompat.startActivity;
-
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -21,8 +19,6 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
-
-import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.mlkit.vision.barcode.common.Barcode;
@@ -112,18 +108,32 @@ public class QRScannerActivity extends AppCompatActivity {
 
         db.collection("qr_codes").document(code).get().addOnSuccessListener(document -> {
             if (document.exists()) {
-                // Get current Firebase UID
-                String currentUserId = FirebaseAuth.getInstance().getCurrentUser().getUid();
+                String currentUserId = FirebaseAuth.getInstance().getCurrentUser() != null
+                    ? FirebaseAuth.getInstance().getCurrentUser().getUid()
+                    : null;
 
-                // 1️⃣ Save to AppData singleton
+                if (currentUserId == null) {
+                    Toast.makeText(this, "User not logged in", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                // Save to AppData singleton for persistence
                 AppData.getInstance().setQrCode(code);
                 AppData.getInstance().setUserId(currentUserId);
 
-                // 2️⃣ Pass to PaymentActivity via Intent
+                // Pass data via Intent for immediate use
                 Intent i = new Intent(QRScannerActivity.this, PaymentActivity.class);
                 i.putExtra("qr_code", code);
                 i.putExtra("user_id", currentUserId);
-
+                
+                // Get additional data from document
+                Boolean isActive = document.getBoolean("isActive");
+                String status = document.getString("status");
+                
+                // Pass additional data
+                i.putExtra("isActive", isActive != null ? isActive : false);
+                i.putExtra("status", status);
+                
                 startActivity(i);
                 finish();
             } else {
@@ -135,7 +145,6 @@ public class QRScannerActivity extends AppCompatActivity {
             isScanned = false;
         });
     }
-
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {

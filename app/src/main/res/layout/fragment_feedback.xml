@@ -80,78 +80,6 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Feedback Type Selection -->
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            android:text="@string/feedback_type"
-            android:textColor="#000000"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <RadioGroup
-            android:id="@+id/feedbackTypeGroup"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp">
-
-            <com.google.android.material.card.MaterialCardView
-                style="@style/DarkCardView"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp">
-
-                <RadioButton
-                    android:id="@+id/radioSuggestion"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="?attr/selectableItemBackground"
-                    android:button="@null"
-                    android:drawableEnd="?android:attr/listChoiceIndicatorSingle"
-                    android:padding="16dp"
-                    android:text="@string/suggestion_improvement"
-                    android:textColor="#000000"
-                    android:textSize="16sp" />
-            </com.google.android.material.card.MaterialCardView>
-
-            <com.google.android.material.card.MaterialCardView
-                style="@style/DarkCardView"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp">
-
-                <RadioButton
-                    android:id="@+id/radioBug"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="?attr/selectableItemBackground"
-                    android:button="@null"
-                    android:drawableEnd="?android:attr/listChoiceIndicatorSingle"
-                    android:padding="16dp"
-                    android:text="@string/report_bug"
-                    android:textColor="#000000"
-                    android:textSize="16sp" />
-            </com.google.android.material.card.MaterialCardView>
-
-            <com.google.android.material.card.MaterialCardView
-                style="@style/DarkCardView"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <RadioButton
-                    android:id="@+id/radioCompliment"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="?attr/selectableItemBackground"
-                    android:button="@null"
-                    android:drawableEnd="?android:attr/listChoiceIndicatorSingle"
-                    android:padding="16dp"
-                    android:text="@string/compliment"
-                    android:textColor="#000000"
-                    android:textSize="16sp" />
-            </com.google.android.material.card.MaterialCardView>
-        </RadioGroup>
 
         <!-- Feedback Form -->
         <com.google.android.material.card.MaterialCardView
@@ -180,7 +108,9 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="20dp"
-                    android:hint="@string/your_feedback">
+                    android:hint="@string/your_feedback"
+                    app:boxStrokeColor="#4CAF50"
+                    app:hintTextColor="#4CAF50">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/feedbackInput"
@@ -188,7 +118,9 @@
                         android:layout_height="wrap_content"
                         android:gravity="top"
                         android:inputType="textMultiLine"
-                        android:lines="5" />
+                        android:lines="5"
+                        android:textColor="#212121"
+                        android:textColorHint="#757575" />
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <LinearLayout

@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.text.InputType;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -90,6 +91,10 @@ public class MainActivity extends AppCompatActivity {
                 .build();
 
         mGoogleSignInClient = GoogleSignIn.getClient(this, gso);
+        
+        // Check Google Play Services availability
+        Log.d("GoogleSignIn", "Google Sign-In client initialized");
+        Log.d("GoogleSignIn", "Web client ID: " + getString(R.string.default_web_client_id));
 
         // Set click listeners with animations
         googleSignInButton.setOnClickListener(view -> {
@@ -210,9 +215,15 @@ public class MainActivity extends AppCompatActivity {
                         FirebaseUser user = mAuth.getCurrentUser();
                         if (user != null) {
                             Map<String, Object> newUser = new HashMap<>();
+                            newUser.put("email", user.getEmail());
                             newUser.put("phoneVerified", false);
                             newUser.put("deviceId", null);
-                            newUser.put("phone", user.getPhoneNumber()); // <-- make sure phone is saved
+                            newUser.put("phone", user.getPhoneNumber() != null ? user.getPhoneNumber() : "");
+                            newUser.put("username", "");
+                            newUser.put("age", "");
+                            newUser.put("gender", "");
+                            newUser.put("profileImageUrl", "");
+                            newUser.put("createdAt", System.currentTimeMillis());
                             db.collection("users").document(userId).set(newUser);
 
                             sendOtpRequest(user.getPhoneNumber(), userId);
@@ -239,7 +250,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         OkHttpClient client = new OkHttpClient();
-        String url = "https://sikad-otp-server.onrender.com/otp/start";
+        String url = getString(R.string.otp_base_url) + "/otp/start";
 
         // JSON payload
         String json = "{ \"phone\": \"" + phoneNumber + "\" }";
@@ -304,8 +315,22 @@ public class MainActivity extends AppCompatActivity {
 
 
     private void signInWithGoogle() {
-        Intent signInIntent = mGoogleSignInClient.getSignInIntent();
-        startActivityForResult(signInIntent, RC_SIGN_IN);
+        Log.d("GoogleSignIn", "Starting Google Sign-In process...");
+        
+        // Clear any existing sign-in state to force account selection
+        mGoogleSignInClient.signOut().addOnCompleteListener(this, task -> {
+            Log.d("GoogleSignIn", "Cleared previous sign-in state");
+            
+            // Check if Google Play Services is available
+            try {
+                Intent signInIntent = mGoogleSignInClient.getSignInIntent();
+                Log.d("GoogleSignIn", "Google Sign-In intent created successfully");
+                startActivityForResult(signInIntent, RC_SIGN_IN);
+            } catch (Exception e) {
+                Log.e("GoogleSignIn", "Error creating Google Sign-In intent: " + e.getMessage());
+                Toast.makeText(this, "Google Sign-In error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     @Override
@@ -318,7 +343,9 @@ public class MainActivity extends AppCompatActivity {
                 GoogleSignInAccount account = task.getResult(ApiException.class);
                 firebaseAuthWithGoogle(account.getIdToken());
             } catch (ApiException e) {
-                Toast.makeText(this, "Google Sign-In failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                String errorMessage = "Google Sign-In failed: " + e.getStatusCode() + " - " + e.getMessage();
+                Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show();
+                Log.e("GoogleSignIn", "Sign-in failed with code: " + e.getStatusCode(), e);
             }
         }
     }
