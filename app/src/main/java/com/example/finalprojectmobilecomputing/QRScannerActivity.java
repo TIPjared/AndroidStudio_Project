@@ -21,6 +21,7 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.mlkit.vision.barcode.common.Barcode;
 import com.google.mlkit.vision.barcode.BarcodeScanner;
@@ -125,9 +126,14 @@ public class QRScannerActivity extends AppCompatActivity {
                 Boolean isActive = document.getBoolean("isActive");
                 String status = document.getString("status");
 
+                // Get current user ID
+                String currentUserId = FirebaseAuth.getInstance().getCurrentUser() != null
+                    ? FirebaseAuth.getInstance().getCurrentUser().getUid()
+                    : null;
+
                 Intent i = new Intent(QRScannerActivity.this, PaymentActivity.class);
                 i.putExtra("qr_code", code);   // doc ID
-                i.putExtra("bike_id", bikeId); // field value
+                i.putExtra("user_id", currentUserId); // current user ID
                 i.putExtra("isActive", isActive != null ? isActive : false);
                 i.putExtra("status", status);
                 startActivity(i);

@@ -1,67 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Custom Card Styles -->
-    <style name="CustomCardView" parent="Widget.MaterialComponents.CardView">
-        <item name="cardBackgroundColor">@color/colorCardBackground</item>
-        <item name="cardCornerRadius">16dp</item>
-        <item name="cardElevation">4dp</item>
-        <item name="strokeWidth">1dp</item>
-        <item name="strokeColor">#E0E0E0</item>
-    </style>
-    
-    <style name="DarkCardView" parent="Widget.MaterialComponents.CardView">
-        <item name="cardBackgroundColor">@color/colorLightCard</item>
-        <item name="cardCornerRadius">16dp</item>
-        <item name="cardElevation">4dp</item>
-        <item name="strokeWidth">1dp</item>
-        <item name="strokeColor">#E0E0E0</item>
-    </style>
-    
-    <style name="TextInputStyle" parent="Widget.MaterialComponents.TextInputLayout.OutlinedBox">
-        <item name="boxBackgroundColor">@color/colorCardBackground</item>
-        <item name="boxStrokeColor">@color/colorAccent</item>
-        <item name="android:textColorHint">@color/colorSecondaryText</item>
-    </style>
-    
-    <!-- Custom TextInput Style with Green Theme -->
-    <style name="SikadTextInputStyle" parent="Widget.MaterialComponents.TextInputLayout.OutlinedBox">
-        <item name="colorPrimary">@color/sikad_green</item>
-        <item name="colorPrimaryVariant">@color/sikad_green_dark</item>
-        <item name="colorOnSurface">@color/sikad_green</item>
-        <item name="colorControlActivated">@color/sikad_green</item>
-        <item name="colorControlHighlight">@color/sikad_green_light</item>
-        <item name="android:textColorHint">@color/colorSecondaryText</item>
-        <item name="hintTextColor">@color/sikad_green</item>
-        <item name="boxStrokeColor">@color/sikad_green</item>
-        <item name="endIconTint">@color/sikad_green</item>
-        <item name="boxBackgroundColor">@android:color/white</item>
-        <item name="android:textColor">@android:color/black</item>
-    </style>
-    
-    <!-- Custom EditText Style with Green Theme -->
-    <style name="SikadEditTextStyle" parent="Widget.AppCompat.EditText">
-        <item name="android:textCursorDrawable">@drawable/cursor_green</item>
-        <item name="android:textSelectHandle">@drawable/text_select_handle_green</item>
-        <item name="android:textSelectHandleLeft">@drawable/text_select_handle_left_green</item>
-        <item name="android:textSelectHandleRight">@drawable/text_select_handle_right_green</item>
-        <item name="colorControlActivated">@color/sikad_green</item>
-        <item name="colorControlHighlight">@color/sikad_green_light</item>
-    </style>
-    
-    <!-- Enhanced Navigation Drawer Text Style -->
-    <style name="NavigationDrawerTextStyle" parent="Widget.MaterialComponents.NavigationView">
-        <item name="android:textSize">16sp</item>
-        <item name="android:textStyle">normal</item>
-        <item name="android:fontFamily">sans-serif-medium</item>
-        <item name="android:textColor">#FFFFFF</item>
-    </style>
-    
-    <!-- Emergency Alert Dialog Theme -->
-    <style name="EmergencyAlertTheme" parent="Theme.AppCompat.Light.Dialog">
+    <style name="EmergencyAlertTheme" parent="Theme.AppCompat.Light.Dialog.Alert">
         <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:windowNoTitle">true</item>
         <item name="android:windowIsFloating">true</item>
-        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowFullscreen">true</item>
         <item name="android:windowAnimationStyle">@android:style/Animation.Dialog</item>
+        <item name="android:textColor">#FF0000</item>
+        <item name="android:textSize">18sp</item>
+        <item name="android:background">#FFEBEE</item>
     </style>
-</resources> 
+    <style name="AlertDialogCustom" parent="Theme.AppCompat.Light.Dialog.Alert">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Dialog</item>
+        <item name="android:textColor">#333333</item>
+        <item name="android:textSize">16sp</item>
+    </style>
+
+    <style name="CustomCardView" parent="CardView">
+        <item name="cardCornerRadius">12dp</item>
+        <item name="cardElevation">4dp</item>
+        <item name="contentPadding">16dp</item>
+        <item name="cardBackgroundColor">#FFFFFF</item>
+    </style>
+
+    <style name="DarkCardView" parent="CardView">
+        <item name="cardCornerRadius">12dp</item>
+        <item name="cardElevation">4dp</item>
+        <item name="contentPadding">16dp</item>
+        <item name="cardBackgroundColor">#1A1A1A</item>
+    </style>
+
+    <style name="SikadTextInputStyle" parent="Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+        <item name="boxStrokeColor">#4CAF50</item>
+        <item name="boxStrokeWidth">2dp</item>
+        <item name="android:textColorHint">#757575</item>
+    </style>
+
+    <style name="TextInputStyle" parent="Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+        <item name="boxStrokeColor">#4CAF50</item>
+        <item name="boxStrokeWidth">2dp</item>
+        <item name="android:textColorHint">#757575</item>
+    </style>
+
+    <style name="NavigationDrawerTextStyle" parent="TextAppearance.AppCompat">
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">#FFFFFF</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+</resources>

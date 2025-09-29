@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
+import android.graphics.PorterDuff;
 import android.location.Location;
 import android.net.Uri;
 import android.os.Build;
@@ -18,8 +19,22 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.content.res.ColorStateList;
+import android.util.TypedValue;
+import com.google.android.material.button.MaterialButton;
+
+import com.google.gson.Gson;
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import java.io.IOException;
 import androidx.appcompat.app.AlertDialog;
 import android.content.SharedPreferences;
 
@@ -131,6 +146,21 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         navigationView          = findViewById(R.id.navigationView);
         payButton               = findViewById(R.id.payButton);
         stopButton              = findViewById(R.id.stopButton);
+        
+        // Red stop button with stop icon
+        stopButton.setBackgroundTintList(ColorStateList.valueOf(Color.RED));
+        stopButton.setText("Stop Ride");
+        stopButton.setTextColor(getResources().getColor(android.R.color.white));
+        stopButton.setTextSize(18);
+        stopButton.setTypeface(null, android.graphics.Typeface.BOLD);
+        stopButton.setElevation(8);
+        
+        // Add stop icon to the left
+        Drawable stopIcon = getResources().getDrawable(R.drawable.baseline_stop_24);
+        stopIcon.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
+        stopButton.setCompoundDrawablesWithIntrinsicBounds(stopIcon, null, null, null);
+        stopButton.setCompoundDrawablePadding(16);
+        
         distanceTextView        = findViewById(R.id.distanceTextView);
         timerTextView           = findViewById(R.id.timerTextView);
         startTime               = System.currentTimeMillis();
@@ -215,50 +245,132 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         }
 
         payButton.setOnClickListener(v -> {
-            if ("Stop Ride".equals(payButton.getText().toString())) {
-                // If button says Stop Ride → call stopRide()
-                stopRide();
-            } else {
-                // Otherwise → normal Pay Now flow
-                if (currentLocation != null /* && antelBoundary != null && !antelBoundary.isEmpty() */) {
-                    // Geofence check commented out → bypass restriction
-            /*
-            if (PolyUtil.containsLocation(
-                    new LatLng(currentLocation.latitude, currentLocation.longitude),
-                    antelBoundary,
-                    true
-            )) {
-                Intent intent = new Intent(MainPage.this, QRScannerActivity.class);
-                startActivity(intent);
-            } else {
-                Toast.makeText(this, "You must be inside Antel Grand Village to start a ride.", Toast.LENGTH_SHORT).show();
-            }
-            */
-                    // Directly start QR scanner
-                    Intent intent = new Intent(MainPage.this, QRScannerActivity.class);
-                    startActivity(intent);
-                } else {
-                    Toast.makeText(this, "Waiting for current location or geofence data...", Toast.LENGTH_SHORT).show();
+            // Show rates popup before proceeding with payment
+            if (currentLocation != null) {
+                // Create and show rates dialog with better UI
+                AlertDialog.Builder builder = new AlertDialog.Builder(this, R.style.AlertDialogCustom);
+                View dialogView = getLayoutInflater().inflate(R.layout.rates_dialog, null);
+                builder.setView(dialogView);
+                AlertDialog dialog = builder.create();
+                dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+
+                // Create custom rates dialog with smaller buttons
+                String[] rates = new String[] {
+                    "1 Hour - ₱10",
+                    "2 Hours - ₱20",
+                    "3 Hours - ₱30"
+                };
+
+                LinearLayout ratesContainer = dialogView.findViewById(R.id.ratesContainer);
+                for (String rate : rates) {
+                    MaterialButton rateButton = new MaterialButton(this);
+                    rateButton.setText(rate);
+                    rateButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.colorPrimary)));
+                    rateButton.setTextColor(getResources().getColor(android.R.color.white));
+                    rateButton.setCornerRadius(getResources().getDimensionPixelSize(R.dimen.button_corner_radius));
+                    rateButton.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+                    
+                    // Add margins between buttons
+                    LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    );
+                    params.setMargins(0, 8, 0, 8);
+                    rateButton.setLayoutParams(params);
+                    rateButton.setOnClickListener(view -> {
+                        dialog.dismiss();
+                        Intent intent = new Intent(MainPage.this, QRScannerActivity.class);
+                        startActivity(intent);
+                    });
+                    ratesContainer.addView(rateButton);
                 }
+
+                dialog.show();
+            } else {
+                Toast.makeText(this, "Waiting for current location...", Toast.LENGTH_SHORT).show();
             }
         });
 
 
         stopButton.setOnClickListener(v -> {
-            if (currentLocation != null && antelBoundary != null && !antelBoundary.isEmpty()) {
-                if (PolyUtil.containsLocation(
-                        new LatLng(currentLocation.latitude, currentLocation.longitude),
-                        antelBoundary,
-                        true
-                )) {
-                    Toast.makeText(this, "Ride ended successfully.", Toast.LENGTH_LONG).show();
-                    stopRide();
-                } else {
-                    Toast.makeText(this, "You must return inside the area to end your ride.", Toast.LENGTH_SHORT).show();
-                }
-            } else {
-                Toast.makeText(this, "Waiting for current location or geofence data...", Toast.LENGTH_SHORT).show();
+            // Retrieve scanned data from AppData
+            String qrCode = AppData.getInstance().getQrCode();
+            String currentUserId = AppData.getInstance().getUserId();
+
+            if (qrCode == null || currentUserId == null) {
+                Toast.makeText(MainPage.this, "No scanned bike or user found", Toast.LENGTH_SHORT).show();
+                return;
             }
+
+            // Derive bikeId from QR code
+            String bikeId = qrCode.split("_qr")[0];
+
+            Map<String, String> endRidePayload = new HashMap<>();
+            endRidePayload.put("bikeId", bikeId);
+            endRidePayload.put("qrCode", qrCode);
+            endRidePayload.put("userId", currentUserId);
+
+            OkHttpClient client = new OkHttpClient();
+
+            // --- Call /endRide ---
+            RequestBody endRideBody = RequestBody.create(
+                    new Gson().toJson(endRidePayload),
+                    MediaType.parse("application/json; charset=utf-8")
+            );
+
+            Request endRideReq = new Request.Builder()
+                    .url("https://sikad-server.onrender.com/endRide")
+                    .post(endRideBody)
+                    .build();
+
+            client.newCall(endRideReq).enqueue(new okhttp3.Callback() {
+                @Override
+                public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                    runOnUiThread(() ->
+                            Toast.makeText(MainPage.this, "Failed to end ride: " + e.getMessage(), Toast.LENGTH_SHORT).show()
+                    );
+                }
+
+                @Override
+                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                    if (response.isSuccessful()) {
+                        // --- Only after ending ride, lock the bike ---
+                        Map<String, String> lockPayload = new HashMap<>();
+                        lockPayload.put("bikeId", bikeId);
+
+                        RequestBody lockBody = RequestBody.create(
+                                new Gson().toJson(lockPayload),
+                                MediaType.parse("application/json; charset=utf-8")
+                        );
+
+                        Request lockReq = new Request.Builder()
+                                .url("https://sikad-server.onrender.com/lockBike")
+                                .post(lockBody)
+                                .build();
+
+                        client.newCall(lockReq).enqueue(new okhttp3.Callback() {
+                            @Override
+                            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                                runOnUiThread(() ->
+                                        Toast.makeText(MainPage.this, "Failed to lock bike: " + e.getMessage(), Toast.LENGTH_SHORT).show()
+                                );
+                            }
+
+                            @Override
+                            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                                runOnUiThread(() -> {
+                                    Toast.makeText(MainPage.this, "Ride stopped and bike locked", Toast.LENGTH_SHORT).show();
+                                    stopRide(); // Call stopRide() only after successful lock
+                                });
+                            }
+                        });
+                    } else {
+                        runOnUiThread(() ->
+                                Toast.makeText(MainPage.this, "Error ending ride", Toast.LENGTH_SHORT).show()
+                        );
+                    }
+                }
+            });
         });
 
 
@@ -444,7 +556,24 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
     private void updateTransactionUI() {
         if (transactionAuthorized) {
-            payButton.setText("Stop Ride");
+            // Show red stop button
+            stopButton.setVisibility(View.VISIBLE);
+            stopButton.setText("Stop Ride");
+            stopButton.setBackgroundTintList(ColorStateList.valueOf(Color.RED));
+            stopButton.setTextColor(getResources().getColor(android.R.color.white));
+            stopButton.setTextSize(18);
+            stopButton.setTypeface(null, android.graphics.Typeface.BOLD);
+            stopButton.setElevation(8);
+            
+            // Add stop icon to the left
+            Drawable stopIcon = getResources().getDrawable(R.drawable.baseline_stop_24);
+            stopIcon.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
+            stopButton.setCompoundDrawablesWithIntrinsicBounds(stopIcon, null, null, null);
+            stopButton.setCompoundDrawablePadding(16);
+            
+            // Hide Pay Now button during ride
+            payButton.setVisibility(View.GONE);
+            
             locationCard.setVisibility(View.VISIBLE);
             distanceTextView.setVisibility(View.VISIBLE);
             timerTextView.setVisibility(View.VISIBLE);
@@ -453,7 +582,15 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             startLocationUpdates();
             startTimer();
         } else {
+            // Show Pay Now button
             payButton.setText("Pay Now");
+            payButton.setVisibility(View.VISIBLE);
+            payButton.setBackgroundTintList(getResources().getColorStateList(android.R.color.holo_green_dark));
+            payButton.setTextColor(getResources().getColor(android.R.color.white));
+            payButton.setTextSize(18);
+            payButton.setTypeface(null, android.graphics.Typeface.BOLD);
+            
+            // Hide stop button when not riding
             stopButton.setVisibility(View.GONE);
         }
     }
