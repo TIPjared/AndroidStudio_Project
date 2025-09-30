@@ -46,20 +46,14 @@
         app:layout_constraintTop_toTopOf="parent"
         android:scaleType="centerCrop">
 
-        <!-- Simple Profile Image -->
-        <FrameLayout
+        <ImageView
+            android:id="@+id/profileImage"
             android:layout_width="match_parent"
-            android:layout_height="match_parent">
-
-            <ImageView
-                android:id="@+id/profileImage"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:scaleType="centerCrop"
-                android:src="@drawable/baseline_person_outline_24"
-                android:contentDescription="@string/user_name"
-                android:padding="8dp" />
-        </FrameLayout>
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            android:src="@drawable/baseline_person_outline_24"
+            android:contentDescription="@string/user_name"
+            android:padding="8dp" />
     </androidx.cardview.widget.CardView>
 
     <!-- User Info with Enhanced Typography -->
@@ -80,41 +74,78 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/profileContainer" />
 
-    <TextView
-        android:id="@+id/profileEmail"
+    <!-- Email Container -->
+    <LinearLayout
+        android:id="@+id/emailContainer"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:text="user@email.com"
-        android:textColor="#E8F5E9"
-        android:textSize="16sp"
-        android:fontFamily="sans-serif"
-        android:drawableStart="@drawable/mail"
-        android:drawablePadding="8dp"
-        android:drawableTint="#E8F5E9"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="@id/profileName"
-        app:layout_constraintTop_toBottomOf="@id/profileName" />
+        app:layout_constraintTop_toBottomOf="@id/profileName">
 
-    <TextView
-        android:id="@+id/profilePhone"
+        <ImageView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/mail"
+            android:tint="#E8F5E9"
+            android:layout_marginEnd="8dp"/>
+
+        <TextView
+            android:id="@+id/profileEmail"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="user@email.com"
+            android:textColor="#E8F5E9"
+            android:textSize="16sp"
+            android:fontFamily="sans-serif"/>
+    </LinearLayout>
+
+    <!-- Phone Container -->
+    <LinearLayout
+        android:id="@+id/phoneContainer"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:text="@string/user_phone"
-        android:textColor="#E8F5E9"
-        android:textSize="14sp"
-        android:fontFamily="sans-serif"
-                android:drawableStart="@drawable/baseline_sms_24"
-        android:drawablePadding="8dp"
-        android:drawableTint="#E8F5E9"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="@id/profileName"
-        app:layout_constraintTop_toBottomOf="@id/profileEmail" />
+        app:layout_constraintTop_toBottomOf="@id/emailContainer">
+
+        <ImageView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/baseline_sms_24"
+            android:tint="#E8F5E9"
+            android:layout_marginEnd="8dp"/>
+
+        <TextView
+            android:id="@+id/profilePhone"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="@string/user_phone"
+            android:textColor="#E8F5E9"
+            android:textSize="14sp"
+            android:fontFamily="sans-serif"/>
+
+        <ImageButton
+            android:id="@+id/togglePhoneVisibility"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_visibility"
+            android:tint="#E8F5E9"
+            android:layout_marginStart="8dp"/>
+    </LinearLayout>
 
     <!-- Online Status Text -->
     <TextView
@@ -132,7 +163,7 @@
         android:shadowDy="1"
         android:shadowRadius="2"
         app:layout_constraintStart_toStartOf="@id/profileName"
-        app:layout_constraintTop_toBottomOf="@id/profilePhone" />
+        app:layout_constraintTop_toBottomOf="@id/phoneContainer" />
 
     <!-- Enhanced View Profile Button -->
     <com.google.android.material.button.MaterialButton
@@ -140,7 +171,6 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="20dp"
-        android:layout_marginBottom="8dp"
         android:backgroundTint="#FFFFFF"
         android:textColor="#2E7D32"
         android:text="VIEW PROFILE"
@@ -156,8 +186,7 @@
         android:onClick="goToProfile"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/onlineStatusText"
-        app:layout_constraintBottom_toBottomOf="parent" />
+        app:layout_constraintTop_toBottomOf="@id/onlineStatusText" />
 
     <!-- Quick Stats Cards -->
     <LinearLayout
@@ -167,8 +196,6 @@
         android:layout_marginTop="16dp"
         android:orientation="horizontal"
         android:weightSum="3"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toBottomOf="@id/profileLink">
 
         <!-- Total Rides Card -->

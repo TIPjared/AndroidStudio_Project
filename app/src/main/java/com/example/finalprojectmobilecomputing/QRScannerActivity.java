@@ -21,13 +21,14 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.mlkit.vision.barcode.common.Barcode;
 import com.google.mlkit.vision.barcode.BarcodeScanner;
 import com.google.mlkit.vision.barcode.BarcodeScanning;
 import com.google.mlkit.vision.common.InputImage;
-import com.google.common.util.concurrent.ListenableFuture;
 
 import java.util.concurrent.ExecutionException;
 
@@ -43,25 +44,22 @@ public class QRScannerActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_qrscanner);
 
-        // Check and request camera permission if not granted
+        // Check and request camera permission
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
                 != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this,
                     new String[]{Manifest.permission.CAMERA}, 100);
         }
 
-        // Setup window insets (optional, for edge-to-edge layouts)
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
 
-        // Initialize PreviewView & BarcodeScanner
         previewView = findViewById(R.id.previewView);
         scanner = BarcodeScanning.getClient();
 
-        // Start the camera
         startCamera();
     }
 
@@ -105,7 +103,12 @@ public class QRScannerActivity extends AppCompatActivity {
                         }
                         image.close();
                     })
-                    .addOnFailureListener(e -> image.close());
+                    .addOnFailureListener(e -> {
+                        image.close();
+                        Toast.makeText(QRScannerActivity.this, 
+                            "Error processing image: " + e.getMessage(), 
+                            Toast.LENGTH_SHORT).show();
+                    });
         });
 
         CameraSelector selector = new CameraSelector.Builder()
@@ -116,34 +119,72 @@ public class QRScannerActivity extends AppCompatActivity {
         cameraProvider.bindToLifecycle(this, selector, preview, analysis);
     }
 
-    // ✅ Now fetches the full QR document data from Firestore
     private void validateQR(String code) {
-        FirebaseFirestore db = FirebaseFirestore.getInstance();
+        // First check if user is logged in
+        FirebaseAuth auth = FirebaseAuth.getInstance();
+        if (auth.getCurrentUser() == null) {
+            Toast.makeText(this, "Please login first!", Toast.LENGTH_LONG).show();
+            isScanned = false;
+            return;
+        }
 
-        db.collection("qr_codes").document(code).get().addOnSuccessListener(document -> {
+        // Get Firestore instance
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
+        
+        // Show loading message
+        Toast.makeText(this, "Checking QR code...", Toast.LENGTH_SHORT).show();
+
+        // Clean the QR code (remove any whitespace)
+        String cleanCode = code.trim();
+
+        // Log the QR code being checked (for debugging)
+        android.util.Log.d("QRScanner", "Checking QR code: " + cleanCode);
+
+        db.collection("qr_codes")
+          .document(cleanCode)
+          .get()
+          .addOnSuccessListener(document -> {
             if (document.exists()) {
+                // Log successful document retrieval
+                android.util.Log.d("QRScanner", "Document exists: " + document.getData());
+
                 String bikeId = document.getString("bike_id");
                 Boolean isActive = document.getBoolean("isActive");
                 String status = document.getString("status");
 
-                // Get current user ID
-                String currentUserId = FirebaseAuth.getInstance().getCurrentUser() != null
-                    ? FirebaseAuth.getInstance().getCurrentUser().getUid()
-                    : null;
+                String currentUserId = auth.getCurrentUser().getUid();
+
+                // Log the retrieved data
+                android.util.Log.d("QRScanner", String.format(
+                    "Retrieved data - bikeId: %s, isActive: %s, status: %s, userId: %s",
+                    bikeId, isActive, status, currentUserId
+                ));
+
+                // Save to AppData singleton
+                AppData.getInstance().setQrCode(cleanCode);
+                AppData.getInstance().setUserId(currentUserId);
 
                 Intent i = new Intent(QRScannerActivity.this, PaymentActivity.class);
-                i.putExtra("qr_code", code);   // doc ID
-                i.putExtra("user_id", currentUserId); // current user ID
+                i.putExtra("qr_code", cleanCode);
+                i.putExtra("user_id", currentUserId);
                 i.putExtra("isActive", isActive != null ? isActive : false);
                 i.putExtra("status", status);
+                i.putExtra("bike_id", bikeId);
+
                 startActivity(i);
                 finish();
             } else {
-                Toast.makeText(this, "Invalid QR Code!", Toast.LENGTH_SHORT).show();
+                android.util.Log.e("QRScanner", "Document does not exist for code: " + cleanCode);
+                Toast.makeText(this, "Invalid QR Code! Please try a different one.", Toast.LENGTH_LONG).show();
                 isScanned = false;
             }
-        }).addOnFailureListener(e -> {
-            Toast.makeText(this, "Error checking QR code.", Toast.LENGTH_SHORT).show();
+        })
+        .addOnFailureListener(e -> {
+            // Log the detailed error
+            android.util.Log.e("QRScanner", "Error checking QR code: " + e.getMessage(), e);
+            Toast.makeText(this, 
+                "Connection error! Please check your internet connection and try again.", 
+                Toast.LENGTH_LONG).show();
             isScanned = false;
         });
     }
@@ -156,6 +197,7 @@ public class QRScannerActivity extends AppCompatActivity {
                 startCamera();
             } else {
                 Toast.makeText(this, "Camera permission is required to scan QR codes.", Toast.LENGTH_SHORT).show();
+                finish();
             }
         }
     }

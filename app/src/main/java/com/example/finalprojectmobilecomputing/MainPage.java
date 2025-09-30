@@ -94,6 +94,8 @@ import com.google.android.gms.location.GeofencingClient;
 public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
+    private boolean isPhoneVisible = false;
+    private String originalPhoneNumber = "";
     private GoogleMap mMap;
     private FusedLocationProviderClient fusedLocationClient;
     private LatLng currentLocation;
@@ -985,11 +987,31 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     public static String cachedEmail = "";
     public static boolean dataLoaded = false;
 
+    private void updatePhoneDisplay(TextView phoneView, String phoneNumber) {
+        if (phoneNumber == null || phoneNumber.isEmpty() || phoneNumber.equals("Phone not set")) {
+            phoneView.setText("Phone not set");
+            return;
+        }
+
+        if (isPhoneVisible) {
+            phoneView.setText(phoneNumber);
+        } else {
+            // Mask first 6 digits
+            if (phoneNumber.length() > 6) {
+                String masked = "******" + phoneNumber.substring(6);
+                phoneView.setText(masked);
+            } else {
+                phoneView.setText("******");
+            }
+        }
+    }
+
     private void loadUserProfileData(View headerView) {
         TextView profileName = headerView.findViewById(R.id.profileName);
         TextView profileEmail = headerView.findViewById(R.id.profileEmail);
         TextView profilePhone = headerView.findViewById(R.id.profilePhone);
         ImageView profileImage = headerView.findViewById(R.id.profileImage);
+        ImageButton togglePhoneVisibility = headerView.findViewById(R.id.togglePhoneVisibility);
         
         // Get current Firebase user
         FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
@@ -1001,7 +1023,20 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             if (dataLoaded) {
                 profileEmail.setText(cachedEmail);
                 profileName.setText(cachedUsername.isEmpty() ? "User Name" : cachedUsername);
-                profilePhone.setText(cachedPhone.isEmpty() ? "Phone not set" : cachedPhone);
+                
+                // Set up phone number masking
+                originalPhoneNumber = cachedPhone.isEmpty() ? "Phone not set" : cachedPhone;
+                updatePhoneDisplay(profilePhone, originalPhoneNumber);
+                
+                // Set up visibility toggle
+                if (togglePhoneVisibility != null) {
+                    togglePhoneVisibility.setSelected(isPhoneVisible);
+                    togglePhoneVisibility.setOnClickListener(v -> {
+                        isPhoneVisible = !isPhoneVisible;
+                        togglePhoneVisibility.setSelected(isPhoneVisible);
+                        updatePhoneDisplay(profilePhone, originalPhoneNumber);
+                    });
+                }
                 
                 // Load cached profile image
                 if (!cachedProfileImageUrl.isEmpty()) {
@@ -1040,7 +1075,20 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                             
                             // Update UI with fresh data
                             profileName.setText(cachedUsername.isEmpty() ? "User Name" : cachedUsername);
-                            profilePhone.setText(cachedPhone.isEmpty() ? "Phone not set" : cachedPhone);
+                            
+                            // Set up phone masking for fresh data
+                            originalPhoneNumber = cachedPhone.isEmpty() ? "Phone not set" : cachedPhone;
+                            updatePhoneDisplay(profilePhone, originalPhoneNumber);
+                            
+                            // Set up visibility toggle for fresh data
+                            if (togglePhoneVisibility != null) {
+                                togglePhoneVisibility.setSelected(isPhoneVisible);
+                                togglePhoneVisibility.setOnClickListener(v -> {
+                                    isPhoneVisible = !isPhoneVisible;
+                                    togglePhoneVisibility.setSelected(isPhoneVisible);
+                                    updatePhoneDisplay(profilePhone, originalPhoneNumber);
+                                });
+                            }
                             
                             Log.d("MainPage", "Updated UI with cached data");
                             
