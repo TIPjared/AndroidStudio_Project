@@ -31,4 +31,10 @@ public class AppData {
     public void setUserId(String userId) {
         this.userId = userId;
     }
+
+    // Optional: clear data when ride ends
+    public void clear() {
+        qrCode = null;
+        userId = null;
+    }
 }

@@ -247,49 +247,61 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         }
 
         payButton.setOnClickListener(v -> {
-            // Show rates popup before proceeding with payment
-            if (currentLocation != null) {
-                // Create and show rates dialog with better UI
-                AlertDialog.Builder builder = new AlertDialog.Builder(this, R.style.AlertDialogCustom);
-                View dialogView = getLayoutInflater().inflate(R.layout.rates_dialog, null);
-                builder.setView(dialogView);
-                AlertDialog dialog = builder.create();
-                dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-
-                // Create custom rates dialog with smaller buttons
-                String[] rates = new String[] {
-                    "1 Hour - ₱10",
-                    "2 Hours - ₱20",
-                    "3 Hours - ₱30"
-                };
-
-                LinearLayout ratesContainer = dialogView.findViewById(R.id.ratesContainer);
-                for (String rate : rates) {
-                    MaterialButton rateButton = new MaterialButton(this);
-                    rateButton.setText(rate);
-                    rateButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.colorPrimary)));
-                    rateButton.setTextColor(getResources().getColor(android.R.color.white));
-                    rateButton.setCornerRadius(getResources().getDimensionPixelSize(R.dimen.button_corner_radius));
-                    rateButton.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-                    
-                    // Add margins between buttons
-                    LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT
-                    );
-                    params.setMargins(0, 8, 0, 8);
-                    rateButton.setLayoutParams(params);
-                    rateButton.setOnClickListener(view -> {
-                        dialog.dismiss();
-                        Intent intent = new Intent(MainPage.this, QRScannerActivity.class);
-                        startActivity(intent);
-                    });
-                    ratesContainer.addView(rateButton);
-                }
-
-                dialog.show();
+            if ("Stop Ride".equals(payButton.getText().toString())) {
+                // If button says Stop Ride → call stopRide()
+                stopRide();
             } else {
-                Toast.makeText(this, "Waiting for current location...", Toast.LENGTH_SHORT).show();
+                // Otherwise → normal Pay Now flow
+                if (currentLocation != null && antelBoundary != null && !antelBoundary.isEmpty()) {
+                    if (PolyUtil.containsLocation(
+                            new LatLng(currentLocation.latitude, currentLocation.longitude),
+                            antelBoundary,
+                            true
+                    )) {
+                        // Show rates popup before proceeding with payment
+                        AlertDialog.Builder builder = new AlertDialog.Builder(this, R.style.AlertDialogCustom);
+                        View dialogView = getLayoutInflater().inflate(R.layout.rates_dialog, null);
+                        builder.setView(dialogView);
+                        AlertDialog dialog = builder.create();
+                        dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+
+                        // Create custom rates dialog with smaller buttons
+                        String[] rates = new String[] {
+                            "1 Hour - ₱10",
+                            "2 Hours - ₱20",
+                            "3 Hours - ₱30"
+                        };
+
+                        LinearLayout ratesContainer = dialogView.findViewById(R.id.ratesContainer);
+                        for (String rate : rates) {
+                            MaterialButton rateButton = new MaterialButton(this);
+                            rateButton.setText(rate);
+                            rateButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.colorPrimary)));
+                            rateButton.setTextColor(getResources().getColor(android.R.color.white));
+                            rateButton.setCornerRadius(getResources().getDimensionPixelSize(R.dimen.button_corner_radius));
+                            rateButton.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+                            
+                            // Add margins between buttons
+                            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT,
+                                LinearLayout.LayoutParams.WRAP_CONTENT
+                            );
+                            params.setMargins(0, 8, 0, 8);
+                            rateButton.setLayoutParams(params);
+                            rateButton.setOnClickListener(view -> {
+                                dialog.dismiss();
+                                Intent intent = new Intent(MainPage.this, QRScannerActivity.class);
+                                startActivity(intent);
+                            });
+                            ratesContainer.addView(rateButton);
+                        }
+                        dialog.show();
+                    } else {
+                        Toast.makeText(this, "You must be inside Antel Grand Village to start a ride.", Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    Toast.makeText(this, "Waiting for current location data...", Toast.LENGTH_SHORT).show();
+                }
             }
         });
 
@@ -1186,10 +1198,10 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (bikeListener != null && bikeStatusRef != null) {
+        if (bikeStatusRef != null && bikeListener != null) {
             bikeStatusRef.removeEventListener(bikeListener);
-            bikeListener = null;
             bikeStatusRef = null;
+            bikeListener = null;
         }
     }
 }
