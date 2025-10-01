@@ -50,13 +50,11 @@ public class QRScannerActivity extends AppCompatActivity {
             ActivityCompat.requestPermissions(this,
                     new String[]{Manifest.permission.CAMERA}, 100);
         }
-
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
-
         previewView = findViewById(R.id.previewView);
         scanner = BarcodeScanning.getClient();
 
@@ -81,15 +79,9 @@ public class QRScannerActivity extends AppCompatActivity {
 
         ImageAnalysis analysis = new ImageAnalysis.Builder().build();
         analysis.setAnalyzer(ContextCompat.getMainExecutor(this), image -> {
-            if (image.getImage() == null) {
-                image.close();
-                return;
-            }
 
-            InputImage inputImage = InputImage.fromMediaImage(
-                    image.getImage(),
-                    image.getImageInfo().getRotationDegrees()
-            );
+            if (image.getImage() == null) return;
+            InputImage inputImage = InputImage.fromMediaImage(image.getImage(), image.getImageInfo().getRotationDegrees());
 
             scanner.process(inputImage)
                     .addOnSuccessListener(barcodes -> {
@@ -188,6 +180,7 @@ public class QRScannerActivity extends AppCompatActivity {
             isScanned = false;
         });
     }
+
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {

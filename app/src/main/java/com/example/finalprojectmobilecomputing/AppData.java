@@ -1,21 +1,25 @@
 package com.example.finalprojectmobilecomputing;
 
 public class AppData {
+    // Singleton instance
     private static AppData instance;
+
+    // Data to share
     private String qrCode;
     private String userId;
 
-    private AppData() {
-        // Private constructor to prevent instantiation
-    }
+    // Private constructor to prevent instantiation
+    private AppData() { }
 
-    public static AppData getInstance() {
+    // Get singleton instance
+    public static synchronized AppData getInstance() {
         if (instance == null) {
             instance = new AppData();
         }
         return instance;
     }
 
+    // Getters and setters
     public String getQrCode() {
         return qrCode;
     }

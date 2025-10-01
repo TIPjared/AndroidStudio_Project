@@ -86,6 +86,17 @@ dependencies {
     implementation(libs.firebase.storage)
 
     implementation ("com.google.maps.android:android-maps-utils:2.3.0")
+    // Firebase Auth
+    implementation ("com.google.firebase:firebase-auth:22.1.1")
+
+    // Firestore
+    implementation ("com.google.firebase:firebase-firestore:24.9.0")
+
+    // OkHttp
+    implementation("com.squareup.okhttp3:okhttp:4.11.0")
+
+    // Gson (if using for JSON serialization)
+    implementation("com.google.code.gson:gson:2.10.1")
 
     // AI Dependency
 
