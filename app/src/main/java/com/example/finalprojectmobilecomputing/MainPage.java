@@ -515,7 +515,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     }
 
     // 🔊 Listen for live updates on the bike document
-    // 🔊 Listen for live updates on qr_codes where rentedBy == currentUserId
+    // 🔊 Listen for live updates on bikes where rentedBy == currentUserId
     private void listenToBikeStatus() {
         // if user not logged in yet, log and return (we'll attach again later)
         if (currentUserId == null) {
@@ -529,7 +529,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             bikeListener = null;
         }
 
-        bikeListener = db.collection("qr_codes")
+        bikeListener = db.collection("bikes")
                 .whereEqualTo("rentedBy", currentUserId)
                 .addSnapshotListener((snapshots, e) -> {
                     if (e != null) {
