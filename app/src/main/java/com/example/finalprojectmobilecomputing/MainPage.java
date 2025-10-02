@@ -673,7 +673,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                     String selectedOption = options[which];
 
                     // Save to AppData
-                    AppData.getInstance().setRideDuration(selectedOption);
+                    AppData.getInstance().setRideTime(selectedOption);
 
                     // Proceed to QR scanner
                     Intent intent = new Intent(MainPage.this, QRScannerActivity.class);

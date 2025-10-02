@@ -6,7 +6,7 @@ public class AppData {
 
     private String qrCode;
     private String userId;
-    private String rideDuration;  // NEW field
+    private String rideTime;  // NEW field
 
     private AppData() { }
 
@@ -33,17 +33,17 @@ public class AppData {
         this.userId = userId;
     }
 
-    public String getRideDuration() {
-        return rideDuration;
+    public String getRideTime() {
+        return rideTime;
     }
 
-    public void setRideDuration(String rideDuration) {
-        this.rideDuration = rideDuration;
+    public void setRideTime(String rideTime) {
+        this.rideTime = rideTime;
     }
 
     public void clear() {
         qrCode = null;
         userId = null;
-        rideDuration = null;
+        rideTime = null;
     }
 }

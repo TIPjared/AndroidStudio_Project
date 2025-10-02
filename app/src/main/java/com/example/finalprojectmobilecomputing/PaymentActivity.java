@@ -52,6 +52,8 @@ public class PaymentActivity extends AppCompatActivity {
         String qrCode = getIntent().getStringExtra("qr_code");
         String userId = getIntent().getStringExtra("user_id");
 
+        String rideTime = AppData.getInstance().getRideTime();
+
         if (qrCode == null || userId == null) {
             Log.e("PAYMENT", "Missing qrCode or userId");
 
@@ -108,8 +110,24 @@ public class PaymentActivity extends AppCompatActivity {
                     PayMongoApi api = retrofit.create(PayMongoApi.class);
 
                     // Create source body for GCash payment
+                    // Create source body for GCash payment
                     Map<String, Object> attributes = new HashMap<>();
-                    attributes.put("amount", 10000); // ₱100.00 in centavos
+
+                    // Determine amount dynamically based on rideTime
+                    int amountInCentavos = 0;
+                    if ("30 minutes".equals(rideTime)) {
+                        amountInCentavos = 2000;  // ₱20.00
+                    } else if ("45 minutes".equals(rideTime)) {
+                        amountInCentavos = 2500;  // ₱20.00
+                    } else if ("1 hour".equals(rideTime)) {
+                        amountInCentavos = 3500;  // ₱35.00
+                    } else {
+                        // fallback if unexpected value
+                        amountInCentavos = 2000;
+                        Log.w("PAYMENT", "Unexpected rideTime: " + rideTime + ", defaulting to ₱20.00");
+                    }
+
+                    attributes.put("amount", amountInCentavos);
                     attributes.put("type", "gcash");
                     attributes.put("currency", "PHP");
 
@@ -120,7 +138,8 @@ public class PaymentActivity extends AppCompatActivity {
                                     "?bikeId=" + bikeId +
                                     "&qrCode=" + qrCode +
                                     "&userId=" + userId +
-                                    "&token=" + token);
+                                    "&token=" + token +
+                                    "&rideTime=" + rideTime);
                     redirect.put("failed", "https://sikad-server.onrender.com/failed");
                     attributes.put("redirect", redirect);
 
