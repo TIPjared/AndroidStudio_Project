@@ -11,9 +11,4 @@
         android:title="@string/nav_support"
         android:icon="@drawable/customer_service" />
 
-    <item
-        android:id="@+id/nav_logout"
-        android:title="@string/nav_logout"
-        android:icon="@drawable/checkout" />
-
 </menu>

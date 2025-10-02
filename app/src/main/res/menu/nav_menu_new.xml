@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- History Item with Enhanced Design -->
+    <item
+        android:id="@+id/nav_history"
+        android:title="@string/nav_history"
+        android:icon="@drawable/clock"
+        android:checkable="true" />
+
+    <!-- Support Item with Enhanced Design -->
+    <item
+        android:id="@+id/nav_support"
+        android:title="@string/nav_support"
+        android:icon="@drawable/customer_service"
+        android:checkable="true" />
+
+    <!-- New Menu Items for Enhanced Experience -->
+
+    <item
+        android:id="@+id/nav_about"
+        android:title="About Sikad"
+        android:icon="@drawable/baseline_info_24"
+        android:checkable="true" />
+
+</menu>

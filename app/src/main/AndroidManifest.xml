@@ -115,6 +115,11 @@
             android:name=".PaymentActivity"
             android:exported="false" />
         <activity
+            android:name=".RideDurationActivity"
+            android:exported="false"
+            android:label="Select Ride Duration"
+            android:parentActivityName=".MainPage" />
+        <activity
             android:name=".LandingPage"
             android:exported="false" />
         <activity
@@ -155,6 +160,36 @@
             android:exported="false"
             android:label="Reset Password"
             android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".PrivacyPolicyActivity"
+            android:exported="false"
+            android:label="Privacy Policy"
+            android:parentActivityName=".PrivacySettingsActivity" />
+        <activity
+            android:name=".TermsOfServiceActivity"
+            android:exported="false"
+            android:label="Terms of Service"
+            android:parentActivityName=".PrivacySettingsActivity" />
+        <activity
+            android:name=".EditProfileActivity"
+            android:exported="false"
+            android:label="Edit Profile"
+            android:parentActivityName=".Profile" />
+        <activity
+            android:name=".FAQActivity"
+            android:exported="false"
+            android:label="FAQ"
+            android:parentActivityName=".SupportFeedbackActivity" />
+        <activity
+            android:name=".HelpCenterActivity"
+            android:exported="false"
+            android:label="Help Center"
+            android:parentActivityName=".SupportFeedbackActivity" />
+        <activity
+            android:name=".ContactSupportActivity"
+            android:exported="false"
+            android:label="Contact Support"
+            android:parentActivityName=".SupportFeedbackActivity" />
     </application>
 
 </manifest>

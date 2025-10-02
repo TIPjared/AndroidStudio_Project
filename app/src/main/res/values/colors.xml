@@ -13,4 +13,6 @@
     <color name="sikad_green">#2a8743</color>
     <color name="sikad_green_light">#4CAF50</color>
     <color name="sikad_green_dark">#1B5E20</color>
+    <color name="textSecondary">#757575</color>
+    <color name="cardBackgroundLight">#F8F9FA</color>
 </resources>

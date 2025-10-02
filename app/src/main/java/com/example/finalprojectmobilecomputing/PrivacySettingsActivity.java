@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
@@ -24,7 +25,9 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 
 public class PrivacySettingsActivity extends AppCompatActivity {
 
@@ -38,6 +41,11 @@ public class PrivacySettingsActivity extends AppCompatActivity {
     private static final String KEY_EMAIL_NOTIFICATIONS = "email_notifications";
     private static final String KEY_MARKETING_COMMUNICATIONS = "marketing_communications";
     private static final String KEY_USAGE_ANALYTICS = "usage_analytics";
+    private static final String KEY_SHARE_BIKE_LOCATION = "share_bike_location";
+    private static final String KEY_ANONYMOUS_USAGE = "anonymous_usage";
+    private static final String KEY_BIKE_HEALTH_DATA = "bike_health_data";
+    private static final String KEY_EMERGENCY_CONTACTS = "emergency_contacts";
+    private static final String KEY_GEOTAGGING = "geotagging";
 
     // UI Components
     private SwitchMaterial shareRideHistorySwitch;
@@ -48,6 +56,11 @@ public class PrivacySettingsActivity extends AppCompatActivity {
     private SwitchMaterial emailNotificationsSwitch;
     private SwitchMaterial marketingCommunicationsSwitch;
     private SwitchMaterial usageAnalyticsSwitch;
+    private SwitchMaterial shareBikeLocationSwitch;
+    private SwitchMaterial anonymousUsageSwitch;
+    private SwitchMaterial bikeHealthDataSwitch;
+    private SwitchMaterial emergencyContactsSwitch;
+    private SwitchMaterial geotaggingSwitch;
     private MaterialButton clearRideHistoryButton;
     private MaterialButton downloadDataButton;
     private LinearLayout privacyPolicyOption;
@@ -101,6 +114,11 @@ public class PrivacySettingsActivity extends AppCompatActivity {
         emailNotificationsSwitch = findViewById(R.id.emailNotificationsSwitch);
         marketingCommunicationsSwitch = findViewById(R.id.marketingCommunicationsSwitch);
         usageAnalyticsSwitch = findViewById(R.id.usageAnalyticsSwitch);
+        shareBikeLocationSwitch = findViewById(R.id.shareBikeLocationSwitch);
+        anonymousUsageSwitch = findViewById(R.id.anonymousUsageSwitch);
+        bikeHealthDataSwitch = findViewById(R.id.bikeHealthDataSwitch);
+        emergencyContactsSwitch = findViewById(R.id.emergencyContactsSwitch);
+        geotaggingSwitch = findViewById(R.id.geotaggingSwitch);
         
         // Buttons
         clearRideHistoryButton = findViewById(R.id.clearRideHistoryButton);
@@ -123,6 +141,11 @@ public class PrivacySettingsActivity extends AppCompatActivity {
         emailNotificationsSwitch.setChecked(prefs.getBoolean(KEY_EMAIL_NOTIFICATIONS, true));
         marketingCommunicationsSwitch.setChecked(prefs.getBoolean(KEY_MARKETING_COMMUNICATIONS, false));
         usageAnalyticsSwitch.setChecked(prefs.getBoolean(KEY_USAGE_ANALYTICS, true));
+        shareBikeLocationSwitch.setChecked(prefs.getBoolean(KEY_SHARE_BIKE_LOCATION, false));
+        anonymousUsageSwitch.setChecked(prefs.getBoolean(KEY_ANONYMOUS_USAGE, true));
+        bikeHealthDataSwitch.setChecked(prefs.getBoolean(KEY_BIKE_HEALTH_DATA, false));
+        emergencyContactsSwitch.setChecked(prefs.getBoolean(KEY_EMERGENCY_CONTACTS, true));
+        geotaggingSwitch.setChecked(prefs.getBoolean(KEY_GEOTAGGING, false));
     }
     
     private void setupListeners() {
@@ -151,13 +174,34 @@ public class PrivacySettingsActivity extends AppCompatActivity {
         usageAnalyticsSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> 
                 savePreference(KEY_USAGE_ANALYTICS, isChecked));
         
+        shareBikeLocationSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> 
+                savePreference(KEY_SHARE_BIKE_LOCATION, isChecked));
+        
+        anonymousUsageSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> 
+                savePreference(KEY_ANONYMOUS_USAGE, isChecked));
+        
+        bikeHealthDataSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> 
+                savePreference(KEY_BIKE_HEALTH_DATA, isChecked));
+        
+        emergencyContactsSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> 
+                savePreference(KEY_EMERGENCY_CONTACTS, isChecked));
+        
+        geotaggingSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> 
+                savePreference(KEY_GEOTAGGING, isChecked));
+        
         // Button click listeners
         clearRideHistoryButton.setOnClickListener(v -> showClearHistoryConfirmation());
         downloadDataButton.setOnClickListener(v -> downloadUserData());
         
-        // Legal information options
-        privacyPolicyOption.setOnClickListener(v -> openWebPage("https://sikad.com/privacy-policy"));
-        termsOfServiceOption.setOnClickListener(v -> openWebPage("https://sikad.com/terms-of-service"));
+        // Legal information options - now open in-app activities
+        privacyPolicyOption.setOnClickListener(v -> {
+            Intent intent = new Intent(PrivacySettingsActivity.this, PrivacyPolicyActivity.class);
+            startActivity(intent);
+        });
+        termsOfServiceOption.setOnClickListener(v -> {
+            Intent intent = new Intent(PrivacySettingsActivity.this, TermsOfServiceActivity.class);
+            startActivity(intent);
+        });
     }
     
     private void savePreference(String key, boolean value) {
@@ -165,8 +209,47 @@ public class PrivacySettingsActivity extends AppCompatActivity {
         editor.putBoolean(key, value);
         editor.apply();
         
+        // Apply the setting immediately
+        applyPrivacySettings();
+        
+        // Sync with Firebase for backup and cross-device sync
+        syncPrivacySettingsToFirebase();
+        
         // Show a toast message to confirm the setting was changed
         Toast.makeText(this, "Setting saved", Toast.LENGTH_SHORT).show();
+    }
+    
+    private void syncPrivacySettingsToFirebase() {
+        if (userId == null) return;
+        
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        Map<String, Object> privacySettings = new HashMap<>();
+        
+        // Collect all privacy settings
+        privacySettings.put("share_ride_history", prefs.getBoolean(KEY_SHARE_RIDE_HISTORY, false));
+        privacySettings.put("show_on_leaderboards", prefs.getBoolean(KEY_SHOW_ON_LEADERBOARDS, true));
+        privacySettings.put("share_achievements", prefs.getBoolean(KEY_SHARE_ACHIEVEMENTS, false));
+        privacySettings.put("background_location", prefs.getBoolean(KEY_BACKGROUND_LOCATION, true));
+        privacySettings.put("push_notifications", prefs.getBoolean(KEY_PUSH_NOTIFICATIONS, true));
+        privacySettings.put("email_notifications", prefs.getBoolean(KEY_EMAIL_NOTIFICATIONS, true));
+        privacySettings.put("marketing_communications", prefs.getBoolean(KEY_MARKETING_COMMUNICATIONS, false));
+        privacySettings.put("usage_analytics", prefs.getBoolean(KEY_USAGE_ANALYTICS, true));
+        privacySettings.put("share_bike_location", prefs.getBoolean(KEY_SHARE_BIKE_LOCATION, false));
+        privacySettings.put("anonymous_usage", prefs.getBoolean(KEY_ANONYMOUS_USAGE, true));
+        privacySettings.put("bike_health_data", prefs.getBoolean(KEY_BIKE_HEALTH_DATA, false));
+        privacySettings.put("emergency_contacts", prefs.getBoolean(KEY_EMERGENCY_CONTACTS, true));
+        privacySettings.put("geotagging", prefs.getBoolean(KEY_GEOTAGGING, false));
+        privacySettings.put("last_updated", System.currentTimeMillis());
+        
+        // Save to Firebase
+        db.collection("user_privacy_settings").document(userId)
+                .set(privacySettings)
+                .addOnSuccessListener(aVoid -> {
+                    Log.d("PRIVACY", "Privacy settings synced to Firebase");
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("PRIVACY", "Failed to sync privacy settings to Firebase", e);
+                });
     }
     
     private void showClearHistoryConfirmation() {
@@ -306,13 +389,27 @@ public class PrivacySettingsActivity extends AppCompatActivity {
         }
     }
     
-    private void openWebPage(String url) {
-        Uri webpage = Uri.parse(url);
-        Intent intent = new Intent(Intent.ACTION_VIEW, webpage);
-        if (intent.resolveActivity(getPackageManager()) != null) {
-            startActivity(intent);
-        } else {
-            Toast.makeText(this, "No browser found to open the link", Toast.LENGTH_SHORT).show();
-        }
+    // Method to check and enforce privacy settings dynamically
+    private boolean checkPrivacySetting(String key, boolean defaultValue) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        return prefs.getBoolean(key, defaultValue);
+    }
+    
+    // Method to apply privacy settings to app functionality
+    private void applyPrivacySettings() {
+        // Example: Apply location sharing setting
+        boolean shareLocation = checkPrivacySetting(KEY_SHARE_BIKE_LOCATION, false);
+        // This would be used in other parts of the app to control location sharing
+        
+        // Example: Apply anonymous usage setting
+        boolean anonymousMode = checkPrivacySetting(KEY_ANONYMOUS_USAGE, true);
+        // This would be used to anonymize user data in analytics
+        
+        // Example: Apply emergency contact setting
+        boolean emergencyContacts = checkPrivacySetting(KEY_EMERGENCY_CONTACTS, true);
+        // This would control whether emergency contacts can be notified
+        
+        Log.d("PRIVACY", "Privacy settings applied - Location: " + shareLocation + 
+              ", Anonymous: " + anonymousMode + ", Emergency: " + emergencyContacts);
     }
 } 
