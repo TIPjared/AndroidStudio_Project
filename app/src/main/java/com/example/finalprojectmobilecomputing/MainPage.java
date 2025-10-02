@@ -235,24 +235,25 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
         payButton.setOnClickListener(v -> {
             if ("Stop Ride".equals(payButton.getText().toString())) {
-                // If button says Stop Ride → call stopRide()
                 stopRide();
             } else {
-                // Otherwise → normal Pay Now flow
                 if (currentLocation != null && antelBoundary != null && !antelBoundary.isEmpty()) {
+
+                    // ===== Temporarily disabled geofence check =====
+            /*
             if (PolyUtil.containsLocation(
                     new LatLng(currentLocation.latitude, currentLocation.longitude),
                     antelBoundary,
                     true
             )) {
-                Intent intent = new Intent(MainPage.this, QRScannerActivity.class);
-                startActivity(intent);
+                showRideDurationDialog();
             } else {
                 Toast.makeText(this, "You must be inside Antel Grand Village to start a ride.", Toast.LENGTH_SHORT).show();
             }
-                    // Directly start QR scanner
-                    Intent intent = new Intent(MainPage.this, QRScannerActivity.class);
-                    startActivity(intent);
+            */
+
+                    // Directly show ride duration popup (no geofence check)
+                    showRideDurationDialog();
 
                 } else {
                     Toast.makeText(this, "Waiting for current location data...", Toast.LENGTH_SHORT).show();
@@ -661,6 +662,25 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         long rideDuration = System.currentTimeMillis() - rideStartTime;
         long minutes = rideDuration / 60000;
         Toast.makeText(this, "Ride time: " + minutes + " minutes", Toast.LENGTH_SHORT).show();
+    }
+
+    private void showRideDurationDialog() {
+        String[] options = {"30 minutes", "45 minutes", "1 hour"};
+
+        new AlertDialog.Builder(this)
+                .setTitle("Select Ride Duration")
+                .setItems(options, (dialog, which) -> {
+                    String selectedOption = options[which];
+
+                    // Save to AppData
+                    AppData.getInstance().setRideDuration(selectedOption);
+
+                    // Proceed to QR scanner
+                    Intent intent = new Intent(MainPage.this, QRScannerActivity.class);
+                    startActivity(intent);
+                })
+                .setNegativeButton("Cancel", (dialog, which) -> dialog.dismiss())
+                .show();
     }
 
     private void resetRideUI() {
