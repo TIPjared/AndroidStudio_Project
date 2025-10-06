@@ -3,6 +3,7 @@ package com.example.finalprojectmobilecomputing;
 import android.content.Intent;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -47,22 +48,27 @@ public class SignUpActivity extends AppCompatActivity {
 
         mAuth = FirebaseAuth.getInstance();
 
-        // Initialize views
-        emailEditText = findViewById(R.id.emailEditText);
-        passwordEditText = findViewById(R.id.passwordEditText);
-        confirmPasswordEditText = findViewById(R.id.confirmPasswordEditText);
-        phoneEditText = findViewById(R.id.phoneEditText);
-        signUpButton = findViewById(R.id.signUpButton);
-        goToLogin = findViewById(R.id.goToLogin);
-        googleSignUpButton = findViewById(R.id.googleSignUpButton);
+        // Initialize views with error handling
+        try {
+            emailEditText = findViewById(R.id.emailEditText);
+            passwordEditText = findViewById(R.id.passwordEditText);
+            confirmPasswordEditText = findViewById(R.id.confirmPasswordEditText);
+            phoneEditText = findViewById(R.id.phoneEditText);
+            signUpButton = findViewById(R.id.signUpButton);
+            goToLogin = findViewById(R.id.goToLogin);
+            googleSignUpButton = findViewById(R.id.googleSignUpButton);
 
-        // Google Sign-In setup
-        GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                .requestIdToken(getString(R.string.default_web_client_id))
-                .requestEmail()
-                .build();
+            // Google Sign-In setup
+            GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                    .requestIdToken(getString(R.string.default_web_client_id))
+                    .requestEmail()
+                    .build();
 
-        mGoogleSignInClient = GoogleSignIn.getClient(this, gso);
+            mGoogleSignInClient = GoogleSignIn.getClient(this, gso);
+        } catch (Exception e) {
+            Log.e("SignUpActivity", "Error initializing views or Google Sign-In", e);
+            Toast.makeText(this, "Initialization error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
 
         // Set click listeners with animations
         signUpButton.setOnClickListener(view -> {
@@ -91,38 +97,57 @@ public class SignUpActivity extends AppCompatActivity {
     }
 
     private void startSignUpAnimations() {
-        // Animate title texts
-        TextView titleText = findViewById(R.id.textView8);
-        TextView subtitleText = findViewById(R.id.textView9);
+        try {
+            // Animate title texts
+            TextView titleText = findViewById(R.id.textView8);
+            TextView subtitleText = findViewById(R.id.textView9);
 
-        Animation fadeIn = AnimationUtils.loadAnimation(this, R.anim.fade_in);
-        Animation slideInLeft = AnimationUtils.loadAnimation(this, R.anim.slide_in_left);
-        Animation slideUp = AnimationUtils.loadAnimation(this, R.anim.slide_up);
-        Animation bounceIn = AnimationUtils.loadAnimation(this, R.anim.bounce_in);
+            if (titleText == null || subtitleText == null) {
+                Log.w("SignUpActivity", "Animation views not found, skipping animations");
+                return;
+            }
 
-        // Stagger animations
-        titleText.startAnimation(fadeIn);
+            Animation fadeIn = AnimationUtils.loadAnimation(this, R.anim.fade_in);
+            Animation slideInLeft = AnimationUtils.loadAnimation(this, R.anim.slide_in_left);
+            Animation slideUp = AnimationUtils.loadAnimation(this, R.anim.slide_up);
+            Animation bounceIn = AnimationUtils.loadAnimation(this, R.anim.bounce_in);
 
-        new Handler().postDelayed(() -> {
-            subtitleText.startAnimation(slideInLeft);
-        }, 200);
+            // Stagger animations
+            titleText.startAnimation(fadeIn);
 
-        new Handler().postDelayed(() -> {
-            findViewById(R.id.mainCardContainer).startAnimation(slideUp);
-        }, 400);
+            new Handler().postDelayed(() -> {
+                if (subtitleText != null) subtitleText.startAnimation(slideInLeft);
+            }, 200);
 
-        new Handler().postDelayed(() -> {
-            signUpButton.startAnimation(bounceIn);
-        }, 600);
+            new Handler().postDelayed(() -> {
+                View mainCard = findViewById(R.id.mainCardContainer);
+                if (mainCard != null) mainCard.startAnimation(slideUp);
+            }, 400);
 
-        new Handler().postDelayed(() -> {
-            findViewById(R.id.googleSignInContainer).startAnimation(bounceIn);
-        }, 700);
+            new Handler().postDelayed(() -> {
+                if (signUpButton != null) signUpButton.startAnimation(bounceIn);
+            }, 600);
+
+            new Handler().postDelayed(() -> {
+                View googleContainer = findViewById(R.id.googleSignInContainer);
+                if (googleContainer != null) googleContainer.startAnimation(bounceIn);
+            }, 700);
+        } catch (Exception e) {
+            Log.e("SignUpActivity", "Error in animations", e);
+            // Don't crash, just skip animations
+        }
     }
 
     private void animateButton(View button) {
-        Animation buttonPress = AnimationUtils.loadAnimation(this, R.anim.button_press);
-        button.startAnimation(buttonPress);
+        try {
+            if (button != null) {
+                Animation buttonPress = AnimationUtils.loadAnimation(this, R.anim.button_press);
+                button.startAnimation(buttonPress);
+            }
+        } catch (Exception e) {
+            Log.e("SignUpActivity", "Error animating button", e);
+            // Don't crash, just skip animation
+        }
     }
 
     private void signUp() {
@@ -130,21 +155,28 @@ public class SignUpActivity extends AppCompatActivity {
         String password = passwordEditText.getText().toString().trim();
         String confirmPassword = confirmPasswordEditText.getText().toString().trim();
         String phoneInput = phoneEditText.getText().toString().trim();
-        final String phone;
-
-        if (phoneInput.startsWith("0")) {
-            phone = "+63" + phoneInput.substring(1);
-        } else {
-            phone = phoneInput;
-        }
-
-
-        if (email.isEmpty() || password.isEmpty() || confirmPassword.isEmpty() || phone.isEmpty()) {
+        
+        // Validate phone number format
+        if (email.isEmpty() || password.isEmpty() || confirmPassword.isEmpty() || phoneInput.isEmpty()) {
             Toast.makeText(SignUpActivity.this, "Please fill in all fields", Toast.LENGTH_SHORT).show();
-        } else if (!password.equals(confirmPassword)) {
-        Toast.makeText(SignUpActivity.this, "Passwords do not match", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // Validate Philippine phone format (must start with 09 and be 11 digits)
+        if (!phoneInput.startsWith("09") || phoneInput.length() != 11) {
+            Toast.makeText(SignUpActivity.this, "Phone number must start with 09 and be 11 digits (e.g., 09171234567)", Toast.LENGTH_LONG).show();
+            phoneEditText.setError("Invalid format");
+            phoneEditText.requestFocus();
+            return;
+        }
+        
+        // Convert to international format for Firebase
+        final String phone = "+63" + phoneInput.substring(1);
+
+        if (!password.equals(confirmPassword)) {
+            Toast.makeText(SignUpActivity.this, "Passwords do not match", Toast.LENGTH_SHORT).show();
         } else if (!isStrongPassword(password)) {
-        Toast.makeText(SignUpActivity.this, "Password must be at least 8 characters and include upper, lower, digit, and special character.", Toast.LENGTH_LONG).show();
+            Toast.makeText(SignUpActivity.this, "Password must be at least 8 characters and include upper, lower, digit, and special character.", Toast.LENGTH_LONG).show();
         } else {
             FirebaseFirestore db = FirebaseFirestore.getInstance();
             db.collection("users")
@@ -168,12 +200,23 @@ public class SignUpActivity extends AppCompatActivity {
                                             newUser.put("phone", phone);
                                             newUser.put("deviceId", null);
                                             newUser.put("phoneVerified", false);
+                                            newUser.put("username", "");
+                                            newUser.put("age", "");
+                                            newUser.put("gender", "");
+                                            newUser.put("profileImageUrl", "");
+                                            newUser.put("createdAt", System.currentTimeMillis());
 
                                             db.collection("users").document(userId)
                                                     .set(newUser)
                                                     .addOnSuccessListener(aVoid -> {
-                                                        Toast.makeText(SignUpActivity.this, "Account created! Please log in.", Toast.LENGTH_SHORT).show();
-                                                        startActivity(new Intent(SignUpActivity.this, MainActivity.class));
+                                                        Toast.makeText(SignUpActivity.this, "Account created! Please verify your phone number.", Toast.LENGTH_SHORT).show();
+                                                        
+                                                        // Navigate to OTP Verification for new sign-up
+                                                        Intent intent = new Intent(SignUpActivity.this, OTPVerification.class);
+                                                        intent.putExtra("phone", phone);
+                                                        intent.putExtra("userId", userId);
+                                                        intent.putExtra("isNewSignUp", true); // Flag to indicate this is a new sign-up
+                                                        startActivity(intent);
                                                         finish();
                                                     })
                                                     .addOnFailureListener(e -> {
@@ -213,7 +256,9 @@ public class SignUpActivity extends AppCompatActivity {
                 GoogleSignInAccount account = task.getResult(ApiException.class);
                 firebaseAuthWithGoogle(account.getIdToken());
             } catch (ApiException e) {
-                Toast.makeText(this, "Google Sign-Up failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                String errorMessage = "Google Sign-Up failed: " + e.getStatusCode() + " - " + e.getMessage();
+                Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show();
+                Log.e("GoogleSignIn", "Sign-in failed with code: " + e.getStatusCode(), e);
             }
         }
     }
@@ -229,7 +274,18 @@ public class SignUpActivity extends AppCompatActivity {
 
                         // Create a user entry in Firestore (without phone initially)
                         FirebaseFirestore db = FirebaseFirestore.getInstance();
-                        db.collection("users").document(userId).set(new UserModel(email, ""))
+                        Map<String, Object> newUser = new HashMap<>();
+                        newUser.put("email", email);
+                        newUser.put("phone", "");
+                        newUser.put("deviceId", null);
+                        newUser.put("phoneVerified", false);
+                        newUser.put("username", "");
+                        newUser.put("age", "");
+                        newUser.put("gender", "");
+                        newUser.put("profileImageUrl", "");
+                        newUser.put("createdAt", System.currentTimeMillis());
+                        
+                        db.collection("users").document(userId).set(newUser)
                                 .addOnSuccessListener(aVoid -> {
                                     // Navigate to OTP verification to collect phone number
                                     Intent intent = new Intent(SignUpActivity.this, OTPVerification.class);

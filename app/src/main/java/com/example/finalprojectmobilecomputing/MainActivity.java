@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.text.InputType;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -76,20 +77,29 @@ public class MainActivity extends AppCompatActivity {
         mAuth = FirebaseAuth.getInstance();
 
         // Initialize UI elements with updated IDs
-        emailField = findViewById(R.id.emailField);
-        passwordField = findViewById(R.id.passwordField);
-        loginButton = findViewById(R.id.loginButton);
-        googleSignInButton = findViewById(R.id.googleSignInButton);
-        goToSignup = findViewById(R.id.goToSignup);
-        forgotPasswordLink = findViewById(R.id.forgotPasswordLink);
+        try {
+            emailField = findViewById(R.id.emailField);
+            passwordField = findViewById(R.id.passwordField);
+            loginButton = findViewById(R.id.loginButton);
+            googleSignInButton = findViewById(R.id.googleSignInButton);
+            goToSignup = findViewById(R.id.goToSignup);
+            forgotPasswordLink = findViewById(R.id.forgotPasswordLink);
 
-        // Google Sign-In setup
-        GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                .requestIdToken(getString(R.string.default_web_client_id))
-                .requestEmail()
-                .build();
+            // Google Sign-In setup
+            GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                    .requestIdToken(getString(R.string.default_web_client_id))
+                    .requestEmail()
+                    .build();
 
-        mGoogleSignInClient = GoogleSignIn.getClient(this, gso);
+            mGoogleSignInClient = GoogleSignIn.getClient(this, gso);
+            
+            // Check Google Play Services availability
+            Log.d("GoogleSignIn", "Google Sign-In client initialized");
+            Log.d("GoogleSignIn", "Web client ID: " + getString(R.string.default_web_client_id));
+        } catch (Exception e) {
+            Log.e("MainActivity", "Error initializing views or Google Sign-In", e);
+            Toast.makeText(this, "Initialization error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
 
         // Set click listeners with animations
         googleSignInButton.setOnClickListener(view -> {
@@ -118,38 +128,57 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startLoginAnimations() {
-        // Animate welcome text
-        TextView welcomeText = findViewById(R.id.textView3);
-        TextView signInText = findViewById(R.id.textView4);
-        
-        Animation fadeIn = AnimationUtils.loadAnimation(this, R.anim.fade_in);
-        Animation slideInLeft = AnimationUtils.loadAnimation(this, R.anim.slide_in_left);
-        Animation slideUp = AnimationUtils.loadAnimation(this, R.anim.slide_up);
-        Animation bounceIn = AnimationUtils.loadAnimation(this, R.anim.bounce_in);
-        
-        // Stagger animations
-        welcomeText.startAnimation(fadeIn);
-        
-        new Handler().postDelayed(() -> {
-            signInText.startAnimation(slideInLeft);
-        }, 200);
-        
-        new Handler().postDelayed(() -> {
-            findViewById(R.id.loginFormContainer).startAnimation(slideUp);
-        }, 400);
-        
-        new Handler().postDelayed(() -> {
-            loginButton.startAnimation(bounceIn);
-        }, 700);
-        
-        new Handler().postDelayed(() -> {
-            findViewById(R.id.googleSignInContainer).startAnimation(bounceIn);
-        }, 800);
+        try {
+            // Animate welcome text
+            TextView welcomeText = findViewById(R.id.textView3);
+            TextView signInText = findViewById(R.id.textView4);
+            
+            if (welcomeText == null || signInText == null) {
+                Log.w("MainActivity", "Animation views not found, skipping animations");
+                return;
+            }
+            
+            Animation fadeIn = AnimationUtils.loadAnimation(this, R.anim.fade_in);
+            Animation slideInLeft = AnimationUtils.loadAnimation(this, R.anim.slide_in_left);
+            Animation slideUp = AnimationUtils.loadAnimation(this, R.anim.slide_up);
+            Animation bounceIn = AnimationUtils.loadAnimation(this, R.anim.bounce_in);
+            
+            // Stagger animations
+            welcomeText.startAnimation(fadeIn);
+            
+            new Handler().postDelayed(() -> {
+                if (signInText != null) signInText.startAnimation(slideInLeft);
+            }, 200);
+            
+            new Handler().postDelayed(() -> {
+                View formContainer = findViewById(R.id.loginFormContainer);
+                if (formContainer != null) formContainer.startAnimation(slideUp);
+            }, 400);
+            
+            new Handler().postDelayed(() -> {
+                if (loginButton != null) loginButton.startAnimation(bounceIn);
+            }, 700);
+            
+            new Handler().postDelayed(() -> {
+                View googleContainer = findViewById(R.id.googleSignInContainer);
+                if (googleContainer != null) googleContainer.startAnimation(bounceIn);
+            }, 800);
+        } catch (Exception e) {
+            Log.e("MainActivity", "Error in animations", e);
+            // Don't crash, just skip animations
+        }
     }
     
     private void animateButton(View button) {
-        Animation buttonPress = AnimationUtils.loadAnimation(this, R.anim.button_press);
-        button.startAnimation(buttonPress);
+        try {
+            if (button != null) {
+                Animation buttonPress = AnimationUtils.loadAnimation(this, R.anim.button_press);
+                button.startAnimation(buttonPress);
+            }
+        } catch (Exception e) {
+            Log.e("MainActivity", "Error animating button", e);
+            // Don't crash, just skip animation
+        }
     }
 
     private void loginWithEmail() {
@@ -210,9 +239,15 @@ public class MainActivity extends AppCompatActivity {
                         FirebaseUser user = mAuth.getCurrentUser();
                         if (user != null) {
                             Map<String, Object> newUser = new HashMap<>();
+                            newUser.put("email", user.getEmail());
                             newUser.put("phoneVerified", false);
                             newUser.put("deviceId", null);
-                            newUser.put("phone", user.getPhoneNumber()); // <-- make sure phone is saved
+                            newUser.put("phone", user.getPhoneNumber() != null ? user.getPhoneNumber() : "");
+                            newUser.put("username", "");
+                            newUser.put("age", "");
+                            newUser.put("gender", "");
+                            newUser.put("profileImageUrl", "");
+                            newUser.put("createdAt", System.currentTimeMillis());
                             db.collection("users").document(userId).set(newUser);
 
                             sendOtpRequest(user.getPhoneNumber(), userId);
@@ -238,49 +273,14 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        OkHttpClient client = new OkHttpClient();
-        String url = "https://sikad-otp-server.onrender.com/otp/start";
-
-        // JSON payload
-        String json = "{ \"phone\": \"" + phoneNumber + "\" }";
-        RequestBody body = RequestBody.create(json, okhttp3.MediaType.parse("application/json; charset=utf-8"));
-
-        Request request = new Request.Builder()
-                .url(url)
-                .post(body)
-                .build();
-
-        client.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                runOnUiThread(() ->
-                        Toast.makeText(MainActivity.this, "Failed to send OTP. Please check your internet connection.", Toast.LENGTH_SHORT).show()
-                );
-            }
-
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                String responseBody = response.body() != null ? response.body().string() : "";
-                
-                if (response.isSuccessful()) {
-                    runOnUiThread(() -> {
-                        Intent intent = new Intent(MainActivity.this, OTPVerification.class);
-                        intent.putExtra("phone", phoneNumber);
-                        intent.putExtra("userId", userId);
-                        startActivity(intent);
-                        finish();
-                    });
-                } else {
-                    runOnUiThread(() -> {
-                        // Handle specific Twilio trial account error
-                        if (response.code() == 403 && responseBody.contains("unverified")) {
-                            showTrialAccountError(phoneNumber, userId);
-                        } else {
-                            Toast.makeText(MainActivity.this, "OTP request failed: " + response.message(), Toast.LENGTH_SHORT).show();
-                        }
-                    });
-                }
-            }
+        // Navigate directly to OTPVerification screen
+        // OTP will be sent via Firebase Phone Auth there
+        runOnUiThread(() -> {
+            Intent intent = new Intent(MainActivity.this, OTPVerification.class);
+            intent.putExtra("phone", phoneNumber);
+            intent.putExtra("userId", userId);
+            startActivity(intent);
+            finish();
         });
     }
 
@@ -304,8 +304,22 @@ public class MainActivity extends AppCompatActivity {
 
 
     private void signInWithGoogle() {
-        Intent signInIntent = mGoogleSignInClient.getSignInIntent();
-        startActivityForResult(signInIntent, RC_SIGN_IN);
+        Log.d("GoogleSignIn", "Starting Google Sign-In process...");
+        
+        // Clear any existing sign-in state to force account selection
+        mGoogleSignInClient.signOut().addOnCompleteListener(this, task -> {
+            Log.d("GoogleSignIn", "Cleared previous sign-in state");
+            
+            // Check if Google Play Services is available
+            try {
+                Intent signInIntent = mGoogleSignInClient.getSignInIntent();
+                Log.d("GoogleSignIn", "Google Sign-In intent created successfully");
+                startActivityForResult(signInIntent, RC_SIGN_IN);
+            } catch (Exception e) {
+                Log.e("GoogleSignIn", "Error creating Google Sign-In intent: " + e.getMessage());
+                Toast.makeText(this, "Google Sign-In error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     @Override
@@ -318,7 +332,9 @@ public class MainActivity extends AppCompatActivity {
                 GoogleSignInAccount account = task.getResult(ApiException.class);
                 firebaseAuthWithGoogle(account.getIdToken());
             } catch (ApiException e) {
-                Toast.makeText(this, "Google Sign-In failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                String errorMessage = "Google Sign-In failed: " + e.getStatusCode() + " - " + e.getMessage();
+                Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show();
+                Log.e("GoogleSignIn", "Sign-in failed with code: " + e.getStatusCode(), e);
             }
         }
     }

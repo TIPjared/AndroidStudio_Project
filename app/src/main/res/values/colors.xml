@@ -1,16 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
-    <color name="colorPrimary">#4CAF50</color>
-    <color name="colorPrimaryDark">#388E3C</color>
+    <color name="colorPrimary">#2E7D32</color>
+    <color name="colorPrimaryDark">#1B5E20</color>
     <color name="colorAccent">#4CAF50</color>
-    <color name="colorBackground">#F7FFF7</color>
-    <color name="colorCardBackground">#FFFFFF</color>
-    <color name="colorLightCard">#F5F5F5</color>
-    <color name="colorText">#222222</color>
-    <color name="colorSecondaryText">#616161</color>
-    <color name="sikad_green">#2a8743</color>
-    <color name="sikad_green_light">#4CAF50</color>
+    <color name="textPrimary">#212121</color>
+    <color name="textSecondary">#757575</color>
+    <color name="cardBackgroundLight">#F5F5F5</color>
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+    
+    <!-- Sikad Theme Colors -->
+    <color name="sikad_green">#2E7D32</color>
     <color name="sikad_green_dark">#1B5E20</color>
+    <color name="sikad_green_light">#4CAF50</color>
+
+    <!-- Additional Theme Colors -->
+    <color name="colorBackground">#FFFFFF</color>
+    <color name="colorText">#212121</color>
+    <color name="colorSecondaryText">#757575</color>
+    <color name="colorCardBackground">#F5F5F5</color>
 </resources>

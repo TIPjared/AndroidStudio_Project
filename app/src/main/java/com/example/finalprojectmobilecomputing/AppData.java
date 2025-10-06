@@ -6,7 +6,9 @@ public class AppData {
 
     private String qrCode;
     private String userId;
+    private String userName;
     private String rideTime;  // NEW field
+    private String bikeId;  // Bike ID from QR code
 
     private AppData() { }
 
@@ -41,9 +43,27 @@ public class AppData {
         this.rideTime = rideTime;
     }
 
+    public String getUserName() {
+        return userName;
+    }
+
+    public void setUserName(String userName) {
+        this.userName = userName;
+    }
+
+    public String getBikeId() {
+        return bikeId;
+    }
+
+    public void setBikeId(String bikeId) {
+        this.bikeId = bikeId;
+    }
+
     public void clear() {
         qrCode = null;
         userId = null;
+        userName = null;
         rideTime = null;
+        bikeId = null;
     }
 }

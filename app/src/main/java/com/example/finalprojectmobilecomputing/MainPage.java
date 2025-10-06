@@ -4,8 +4,21 @@ import android.Manifest;
 import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.drawable.Drawable;
+import android.graphics.PorterDuff;
+import android.content.Context;
+import android.os.SystemClock;
+import android.view.animation.Interpolator;
+import android.view.animation.LinearInterpolator;
+import androidx.core.content.ContextCompat;
+import com.google.android.gms.maps.model.BitmapDescriptor;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.Marker;
 import android.location.Location;
 import android.net.Uri;
 import android.os.Build;
@@ -18,8 +31,26 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.content.res.ColorStateList;
+import android.util.TypedValue;
+import com.google.android.material.button.MaterialButton;
+
+import com.google.gson.Gson;
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import java.io.IOException;
+import java.util.Map;
+import java.util.HashMap;
+import androidx.appcompat.app.AlertDialog;
+import android.content.SharedPreferences;
 
 import com.google.android.gms.location.Geofence;
 import com.google.android.gms.location.GeofencingRequest;
@@ -29,9 +60,7 @@ import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.firebase.Timestamp;
-import com.google.firebase.firestore.FirebaseFirestoreException;
 import com.google.firebase.firestore.GeoPoint;
-import com.google.gson.Gson;
 import com.google.maps.android.PolyUtil;
 
 import androidx.annotation.NonNull;
@@ -58,43 +87,37 @@ import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.material.navigation.NavigationView;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
-import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.SetOptions;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import com.google.firebase.firestore.FieldValue;
-import com.google.firebase.firestore.Transaction;
-import com.google.firebase.firestore.ListenerRegistration;
 
 import com.google.android.gms.location.GeofencingClient;
-
-import okhttp3.Call;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
 
 
 public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
+    private boolean isPhoneVisible = false;
+    private String originalPhoneNumber = "";
     private GoogleMap mMap;
     private FusedLocationProviderClient fusedLocationClient;
     private LatLng currentLocation;
     private List<LatLng> antelBoundary;
+    private Marker bikeMarker; // This will be the rented bike marker
+    private Marker userMarker; // User's own location marker
+    private List<LatLng> ridePathPoints = new ArrayList<>();
+    private Polyline ridePath;
     private DrawerLayout drawerLayout;
     private ImageButton menuButton;
     private NavigationView navigationView;
@@ -104,9 +127,19 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     private Map<String, LatLng> predefinedLocations = new HashMap<>();
 
     private boolean transactionAuthorized = false;
+    
+    // Bike rental GPS logic variables
+    private Map<String, Marker> allBikeMarkers = new HashMap<>(); // All bike markers on map
+    private String rentedBikeId = null; // ID of currently rented bike
+    private LatLng rentedBikeLocation = null; // GPS location of rented bike
+    private static final float PROXIMITY_THRESHOLD_METERS = 30f; // Distance to hide user marker
+    private DatabaseReference bikesRef; // Reference to bikes in Firebase
 
-    // Firebase Database reference
-    private DatabaseReference rideLogsRef;
+    // Firebase references - Realtime Database for GPS data, Firestore for user profiles
+    private DatabaseReference rideLogsRef; // For GPS data in Realtime Database
+    private FirebaseFirestore firestore; // For user profiles in Firestore
+    private FirebaseUser currentUser;
+    private String currentUserId;
     private TextView distanceTextView, timerTextView, elapsedTimeTextView;;
     private float totalDistance = 0f;
     private Location previousLocation;
@@ -119,14 +152,12 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     private CountDownTimer countDownTimer;
     private CardView locationCard;
 
-    private FirebaseFirestore db;
-    private FirebaseUser currentUser;
-    private String currentUserId;
-    // for demo we use a single bike doc, replace with dynamic QR scan later
+    // Bike status tracking variables
+    private com.google.firebase.database.ValueEventListener bikeListener;
+    private com.google.firebase.database.DatabaseReference bikeStatusRef;
 
-    private ListenerRegistration bikeListener = null;
-    private boolean rideTimerStarted = false;
-    private static final String BIKE_DOC_PATH = "bike_qr/bike_001_qr";
+    // Emergency alert system
+    private EmergencyAlertDialog emergencyAlert;
 
 
     @Override
@@ -143,6 +174,21 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         navigationView          = findViewById(R.id.navigationView);
         payButton               = findViewById(R.id.payButton);
         stopButton              = findViewById(R.id.stopButton);
+        
+        // Red stop button with stop icon
+        stopButton.setBackgroundTintList(ColorStateList.valueOf(Color.RED));
+        stopButton.setText("Stop Ride");
+        stopButton.setTextColor(getResources().getColor(android.R.color.white));
+        stopButton.setTextSize(18);
+        stopButton.setTypeface(null, android.graphics.Typeface.BOLD);
+        stopButton.setElevation(8);
+        
+        // Add stop icon to the left
+        Drawable stopIcon = getResources().getDrawable(R.drawable.baseline_stop_24);
+        stopIcon.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
+        stopButton.setCompoundDrawablesWithIntrinsicBounds(stopIcon, null, null, null);
+        stopButton.setCompoundDrawablePadding(16);
+        
         distanceTextView        = findViewById(R.id.distanceTextView);
         timerTextView           = findViewById(R.id.timerTextView);
         startTime               = System.currentTimeMillis();
@@ -154,15 +200,17 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
         // XML layout already handles the icon positioning for proper centering
 
-        // Firebase reference for logging rides
-        rideLogsRef = FirebaseDatabase.getInstance().getReference("rideLogs");
+        // Firebase references - Realtime Database for GPS data, Firestore for user profiles
+        rideLogsRef = FirebaseDatabase.getInstance().getReference("rideLogs"); // GPS data
+        bikesRef = FirebaseDatabase.getInstance().getReference("gpsData"); // Available bikes GPS data
+        firestore = FirebaseFirestore.getInstance(); // User profiles and feedback
 
-        // --- NEW: Firestore init ---
-        db = FirebaseFirestore.getInstance();
+        // Initialize current user for login tracking
         currentUser = FirebaseAuth.getInstance().getCurrentUser();
         currentUserId = (currentUser != null) ? currentUser.getUid() : null;
 
-        listenToBikeStatus();
+        // Update last login timestamp
+        updateLastLoginTimestamp();
 
         // Initially hide route controls
         stopButton.setVisibility(View.GONE);
@@ -178,14 +226,11 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             }
         });
         navigationView.setNavigationItemSelectedListener(item -> {
+            Intent intent;
             if (item.getItemId() == R.id.nav_history) {
                 startActivity(new Intent(MainPage.this, RideHistoryActivity.class));
             } else if (item.getItemId() == R.id.nav_support) {
                 startActivity(new Intent(MainPage.this, SupportFeedbackActivity.class));
-            } else if (item.getItemId() == R.id.nav_logout) {
-                FirebaseAuth.getInstance().signOut();
-                startActivity(new Intent(MainPage.this, LandingPage.class));
-                finish();
             }
             drawerLayout.closeDrawers();
             return true;
@@ -252,10 +297,15 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             }
             */
 
-                    // Directly show ride duration popup (no geofence check)
-                    showRideDurationDialog();
+                    // Navigate to ride duration selection page
+                    Intent intent = new Intent(MainPage.this, RideDurationActivity.class);
+                    startActivity(intent);
 
                 } else {
+                    // Try to create user marker if location is available but marker doesn't exist
+                    if (currentLocation != null && userMarker == null) {
+                        createUserMarker();
+                    }
                     Toast.makeText(this, "Waiting for current location data...", Toast.LENGTH_SHORT).show();
                 }
             }
@@ -328,9 +378,10 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
                             @Override
                             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                                runOnUiThread(() ->
-                                        Toast.makeText(MainPage.this, "Ride stopped and bike locked", Toast.LENGTH_SHORT).show()
-                                );
+                                runOnUiThread(() -> {
+                                    Toast.makeText(MainPage.this, "Ride stopped and bike locked", Toast.LENGTH_SHORT).show();
+                                    stopRide(); // Call stopRide() only after successful lock
+                                });
                             }
                         });
                     } else {
@@ -351,71 +402,15 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         }
     }
 
-    private void updateBikeOnStart() {
-        if (currentUserId == null) return;
-
-        DocumentReference bikeRef = db.document(BIKE_DOC_PATH);
-        db.runTransaction((Transaction.Function<Void>) transaction -> {
-                    DocumentSnapshot snapshot = transaction.get(bikeRef);
-
-                    String status = snapshot.getString("status");
-                    String rentedBy = snapshot.getString("rentedBy");
-
-                    if ("available".equals(status) && rentedBy == null) {
-                        Map<String, Object> updates = new HashMap<>();
-                        updates.put("status", "rented");
-                        updates.put("isActive", true);
-                        updates.put("rentedBy", currentUserId);
-                        transaction.update(bikeRef, updates);
-                    } else {
-                        throw new FirebaseFirestoreException(
-                                "Bike is already rented",
-                                FirebaseFirestoreException.Code.ABORTED
-                        );
-                    }
-                    return null;
-                }).addOnSuccessListener(aVoid ->
-                        Log.d("BikeUpdate", "Bike rented successfully"))
-                .addOnFailureListener(e ->
-                        Log.e("BikeUpdate", "Failed to rent bike", e));
-    }
-
-    private void updateBikeOnEnd() {
-        if (currentUserId == null) return;
-
-        DocumentReference bikeRef = db.document(BIKE_DOC_PATH);
-        db.runTransaction((Transaction.Function<Void>) transaction -> {
-                    DocumentSnapshot snapshot = transaction.get(bikeRef);
-
-                    String rentedBy = snapshot.getString("rentedBy");
-                    if (currentUserId.equals(rentedBy)) {
-                        Map<String, Object> updates = new HashMap<>();
-                        updates.put("status", "available");
-                        updates.put("isActive", false);
-                        updates.put("rentedBy", null); // clear ownership
-                        transaction.update(bikeRef, updates);
-                    } else {
-                        throw new FirebaseFirestoreException(
-                                "You cannot end this ride",
-                                FirebaseFirestoreException.Code.PERMISSION_DENIED
-                        );
-                    }
-                    return null;
-                }).addOnSuccessListener(aVoid ->
-                        Log.d("BikeUpdate", "Bike released successfully"))
-                .addOnFailureListener(e ->
-                        Log.e("BikeUpdate", "Failed to release bike", e));
-    }
-
 
     private void stopRide() {
         if (countDownTimer != null) countDownTimer.cancel();
         if (timerHandler != null && timerRunnable != null) timerHandler.removeCallbacks(timerRunnable);
 
         transactionAuthorized = false;
-
-        // NEW: release the bike in Firestore
-        updateBikeOnEnd();
+        
+        // End the rental and show all bikes again
+        endRental();
 
         long rideDuration = System.currentTimeMillis() - startTime;
         int seconds = (int) (rideDuration / 1000);
@@ -426,15 +421,19 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         elapsedTimeTextView.setText(time);
         elapsedTimeTextView.setVisibility(View.VISIBLE);
 
-        distanceTextView.setVisibility(View.VISIBLE);
-        locationCard.setVisibility(View.VISIBLE);
+        distanceTextView.setVisibility(View.VISIBLE); // make sure distance stays visible
+        locationCard.setVisibility(View.VISIBLE);     // keep card visible
         stopButton.setVisibility(View.GONE);
         payButton.setVisibility(View.VISIBLE);
         payButton.setText("Pay Now");
 
-        showCompletionDialog();
-        updateTransactionUI(false);
 
+        showCompletionDialog();
+        String bikeId = getIntent().getStringExtra("bikeId");
+        if (bikeId != null) {
+            revertQRCodeStatus(bikeId);
+        }
+        updateTransactionUI();
         resetRideUI();
     }
 
@@ -465,6 +464,8 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         }
     }
 
+
+
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
@@ -474,21 +475,12 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     }
 
     private void setupPaymentCallback() {
+        boolean paymentSuccess = false;
+
+        // 1️⃣ Check Intent extra (for new server redirect)
         String paymentStatus = getIntent().getStringExtra("payment_status");
-        if (paymentStatus != null && "success".equals(paymentStatus)) {
-            transactionAuthorized = true;
-
-            // NEW: claim the bike in Firestore (your transaction)
-            updateBikeOnStart();
-
-            CardView locationCard = findViewById(R.id.locationCard);
-            locationCard.setVisibility(View.VISIBLE);
-            timerTextView.setVisibility(View.VISIBLE);
-
-            // start ride UI immediately
-            startRideTimer();
-            updateTransactionUI(true);   // <-- IMPORTANT: was false before
-            return;
+        if ("success".equals(paymentStatus)) {
+            paymentSuccess = true;
         }
 
         // 2️⃣ Check Intent URI (covers old myapp:// scheme and HTTP redirect)
@@ -498,120 +490,91 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             if ("myapp".equals(data.getScheme()) && "main".equals(data.getHost())) {
                 String status = data.getQueryParameter("payment_status"); // updated to match server
                 if ("success".equals(status)) {
-                    transactionAuthorized = true;
+                    paymentSuccess = true;
                 }
             }
             // HTTP redirect from sikad-static.onrender.com
             else if (data.toString().contains("sikad-static.onrender.com")) {
                 String paymentParam = data.getQueryParameter("payment");
                 if ("success".equals(paymentParam)) {
-                    transactionAuthorized = true;
+                    paymentSuccess = true;
                     Toast.makeText(this, "Payment successful!", Toast.LENGTH_SHORT).show();
                 }
             }
         }
-        updateTransactionUI(false);
 
+        // 3️⃣ If payment succeeded, update UI and start timers
+        if (paymentSuccess) {
+            transactionAuthorized = true;
+            
+            // Get the rented bike ID from AppData
+            String bikeId = AppData.getInstance().getBikeId();
+            if (bikeId != null && !bikeId.isEmpty()) {
+                startRental(bikeId);
+            }
+
+            CardView locationCard = findViewById(R.id.locationCard);
+            locationCard.setVisibility(View.VISIBLE);
+
+            timerTextView.setVisibility(View.VISIBLE);
+
+            updateTransactionUI();  // updates buttons, visibility
+        }
     }
 
-    // 🔊 Listen for live updates on the bike document
-    // 🔊 Listen for live updates on bikes where rentedBy == currentUserId
-    private void listenToBikeStatus() {
-        // if user not logged in yet, log and return (we'll attach again later)
-        if (currentUserId == null) {
-            Log.d("MainPage", "listenToBikeStatus: no currentUserId — skipping listener for now.");
-            return;
-        }
+    private void revertQRCodeStatus(String bikeId) {
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
+        DocumentReference qrRef = db.collection("qr_codes").document(bikeId);
 
-        // remove any existing listener to avoid duplicates
-        if (bikeListener != null) {
-            bikeListener.remove();
-            bikeListener = null;
-        }
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("isActive", false);       // back to default
+        updates.put("status", "available");   // or whatever the original value is
 
-        bikeListener = db.collection("bikes")
-                .whereEqualTo("rentedBy", currentUserId)
-                .addSnapshotListener((snapshots, e) -> {
-                    if (e != null) {
-                        Log.e("MainPage", "listenToBikeStatus failed", e);
-                        return;
-                    }
-
-                    boolean shouldActivate = false;
-
-                    if (snapshots != null && !snapshots.isEmpty()) {
-                        for (DocumentSnapshot doc : snapshots.getDocuments()) {
-                            String status = doc.getString("status");
-                            Boolean isActive = doc.getBoolean("isActive");
-                            Log.d("MainPage", "qr_doc=" + doc.getId() + " status=" + status + " isActive=" + isActive);
-
-                            // treat both "paid" and "rented" as valid active states (server uses "paid")
-                            if (( "paid".equals(status) || "rented".equals(status) )
-                                    && Boolean.TRUE.equals(isActive)) {
-                                shouldActivate = true;
-                                break;
-                            }
-                        }
-                    } else {
-                        Log.d("MainPage", "listenToBikeStatus: no docs matching rentedBy=" + currentUserId);
-                    }
-
-                    updateTransactionUI(shouldActivate);
-                });
-
-        Log.d("MainPage", "listenToBikeStatus: attached listener for user=" + currentUserId);
+        qrRef.update(updates)
+                .addOnSuccessListener(aVoid -> Log.d("QR_CODE", "QR code reset after ride"))
+                .addOnFailureListener(e -> Log.e("QR_CODE", "Failed to reset QR code", e));
     }
 
-    private void updateTransactionUI(boolean isActive) {
-        runOnUiThread(() -> {
-            if (isActive) {
-                payButton.setText("Stop Ride");
-                payButton.setVisibility(View.INVISIBLE);
-                stopButton.setVisibility(View.VISIBLE);
+    private void updateTransactionUI() {
+        if (transactionAuthorized) {
+            // Show red stop button
+            stopButton.setVisibility(View.VISIBLE);
+            stopButton.setText("Stop Ride");
+            stopButton.setBackgroundTintList(ColorStateList.valueOf(Color.RED));
+            stopButton.setTextColor(getResources().getColor(android.R.color.white));
+            stopButton.setTextSize(18);
+            stopButton.setTypeface(null, android.graphics.Typeface.BOLD);
+            stopButton.setElevation(8);
+            
+            // Add stop icon to the left
+            Drawable stopIcon = getResources().getDrawable(R.drawable.baseline_stop_24);
+            stopIcon.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
+            stopButton.setCompoundDrawablesWithIntrinsicBounds(stopIcon, null, null, null);
+            stopButton.setCompoundDrawablePadding(16);
+            
+            // Hide Pay Now button during ride
+            payButton.setVisibility(View.GONE);
+            
                 locationCard.setVisibility(View.VISIBLE);
+            distanceTextView.setVisibility(View.VISIBLE);
+            timerTextView.setVisibility(View.VISIBLE);
 
-                // only start timers/locations once
-                if (!rideTimerStarted) {
-                    rideTimerStarted = true;
-                    transactionAuthorized = true;
-
-                    // start the ride timers/location updates
-                    startLocationUpdates();   // existing method
-                    startTimer();             // existing method for elapsed timer
-                    startRideTimer();         // your 30-minute countdown (or test 30s)
-                }
+            startRideTimer();
+            startLocationUpdates();
+            startTimer();
             } else {
-                // turn off ride UI
+            // Show Pay Now button
                 payButton.setText("Pay Now");
                 payButton.setVisibility(View.VISIBLE);
-                stopButton.setVisibility(View.GONE);
-                locationCard.setVisibility(View.GONE);
-
-                // stop timers & location updates if they were started
-                if (rideTimerStarted) {
-                    rideTimerStarted = false;
-                    transactionAuthorized = false;
-
-                    // cancel the ride timer and elapsed timer
-                    stopRideTimer(); // cancels countDownTimer
-                    if (timerHandler != null && timerRunnable != null) {
-                        timerHandler.removeCallbacks(timerRunnable);
-                    }
-
-                    // stop location updates gracefully
-                    if (locationCallback != null) {
-                        try {
-                            LocationServices.getFusedLocationProviderClient(MainPage.this)
-                                    .removeLocationUpdates(locationCallback);
-                        } catch (SecurityException ex) {
-                            Log.w("MainPage", "removeLocationUpdates failed", ex);
-                        }
-                    }
-                }
-            }
-        });
+            payButton.setBackgroundTintList(getResources().getColorStateList(android.R.color.holo_green_dark));
+            payButton.setTextColor(getResources().getColor(android.R.color.white));
+            payButton.setTextSize(18);
+            payButton.setTypeface(null, android.graphics.Typeface.BOLD);
+            
+            // Hide stop button when not riding
+            stopButton.setVisibility(View.GONE);
+        }
     }
-
 
     private void startTimer() {
         startTime = System.currentTimeMillis();
@@ -635,6 +598,17 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
     private void startRideTimer() {
         rideStartTime = System.currentTimeMillis();
+        
+        // Initialize ride tracking
+        ridePathPoints.clear();
+        if (bikeMarker != null) {
+            bikeMarker.remove();
+            bikeMarker = null;
+        }
+        if (ridePath != null) {
+            ridePath.remove();
+            ridePath = null;
+        }
 
         countDownTimer = new CountDownTimer(30 * 60 * 1000, 1000) {
             public void onTick(long millisUntilFinished) {
@@ -664,24 +638,143 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         Toast.makeText(this, "Ride time: " + minutes + " minutes", Toast.LENGTH_SHORT).show();
     }
 
-    private void showRideDurationDialog() {
-        String[] options = {"30 minutes", "45 minutes", "1 hour"};
-
-        new AlertDialog.Builder(this)
-                .setTitle("Select Ride Duration")
-                .setItems(options, (dialog, which) -> {
-                    String selectedOption = options[which];
-
-                    // Save to AppData
-                    AppData.getInstance().setRideTime(selectedOption);
-
-                    // Proceed to QR scanner
-                    Intent intent = new Intent(MainPage.this, QRScannerActivity.class);
-                    startActivity(intent);
-                })
-                .setNegativeButton("Cancel", (dialog, which) -> dialog.dismiss())
-                .show();
+    private BitmapDescriptor fromVector(Context context, int vectorResId) {
+        Drawable vectorDrawable = ContextCompat.getDrawable(context, vectorResId);
+        vectorDrawable.setBounds(0, 0, vectorDrawable.getIntrinsicWidth(), vectorDrawable.getIntrinsicHeight());
+        Bitmap bitmap = Bitmap.createBitmap(vectorDrawable.getIntrinsicWidth(), vectorDrawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        vectorDrawable.draw(canvas);
+        return BitmapDescriptorFactory.fromBitmap(bitmap);
     }
+
+    private void loadProfileImageAndCreateMarker(LatLng position) {
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (currentUser != null) {
+            firestore.collection("users").document(currentUser.getUid())
+                    .get()
+                    .addOnSuccessListener(documentSnapshot -> {
+                        if (documentSnapshot.exists()) {
+                            String profileImageUrl = documentSnapshot.getString("profileImageUrl");
+                            if (profileImageUrl != null && !profileImageUrl.isEmpty()) {
+                                // Load image using Picasso
+                                new Thread(() -> {
+                                    try {
+                                        Bitmap profileBitmap = com.squareup.picasso.Picasso.get()
+                                                .load(profileImageUrl)
+                                                .resize(200, 200)
+                                                .centerCrop()
+                                                .get();
+                                        
+                                        runOnUiThread(() -> {
+                                            BitmapDescriptor markerIcon = createMarkerWithProfileImage(profileBitmap);
+                                            MarkerOptions markerOptions = new MarkerOptions()
+                                                    .position(position)
+                                                    .icon(markerIcon)
+                                                    .anchor(0.5f, 1.0f)
+                                                    .flat(false);
+                                            bikeMarker = mMap.addMarker(markerOptions);
+                                        });
+                                    } catch (Exception e) {
+                                        Log.e("ProfileMarker", "Error loading profile image", e);
+                                        runOnUiThread(() -> createDefaultMarker(position));
+                                    }
+                                }).start();
+                            } else {
+                                createDefaultMarker(position);
+                            }
+                        } else {
+                            createDefaultMarker(position);
+                        }
+                    })
+                    .addOnFailureListener(e -> createDefaultMarker(position));
+        } else {
+            createDefaultMarker(position);
+        }
+    }
+
+    private void createDefaultMarker(LatLng position) {
+        MarkerOptions markerOptions = new MarkerOptions()
+                .position(position)
+                .icon(fromVector(MainPage.this, R.drawable.location_pin_marker))
+                .anchor(0.5f, 1.0f)
+                .flat(false);
+        bikeMarker = mMap.addMarker(markerOptions);
+    }
+
+    private BitmapDescriptor createMarkerWithProfileImage(Bitmap profileBitmap) {
+        // Larger marker size for better visibility (Life360 style)
+        int markerSize = 140;
+        int tailHeight = 40;
+        Bitmap markerBitmap = Bitmap.createBitmap(markerSize, markerSize + tailHeight, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(markerBitmap);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        float centerX = markerSize / 2f;
+        float centerY = markerSize / 2f;
+        float radius = markerSize / 2f;
+
+        // Create teardrop path
+        Path teardropPath = new Path();
+        teardropPath.addCircle(centerX, centerY, radius, Path.Direction.CW);
+        teardropPath.moveTo(centerX - 15, centerY + radius - 10);
+        teardropPath.lineTo(centerX, markerSize + tailHeight);
+        teardropPath.lineTo(centerX + 15, centerY + radius - 10);
+        teardropPath.close();
+
+        // Draw green border (outer teardrop)
+        paint.setColor(getResources().getColor(R.color.sikad_green));
+        paint.setStyle(Paint.Style.FILL);
+        canvas.drawPath(teardropPath, paint);
+
+        // Draw profile image fitted inside the circular part of teardrop
+        if (profileBitmap != null) {
+            canvas.save();
+            
+            // Create circular clip path for profile image (slightly smaller than outer circle)
+            Path clipPath = new Path();
+            float imageRadius = radius - 8; // 8px border
+            clipPath.addCircle(centerX, centerY, imageRadius, Path.Direction.CW);
+            canvas.clipPath(clipPath);
+
+            // Scale and draw profile image to fill the circle
+            int imageSize = (int)(imageRadius * 2);
+            Bitmap scaledProfile = Bitmap.createScaledBitmap(profileBitmap, imageSize, imageSize, true);
+            
+            Paint imagePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            imagePaint.setFilterBitmap(true);
+            
+            canvas.drawBitmap(scaledProfile, centerX - imageRadius, centerY - imageRadius, imagePaint);
+            canvas.restore();
+        }
+
+        return BitmapDescriptorFactory.fromBitmap(markerBitmap);
+    }
+
+    private void animateMarker(final Marker marker, final LatLng toPosition) {
+        final Handler handler = new Handler();
+        final long start = SystemClock.uptimeMillis();
+        final long duration = 1000; // Animation duration in ms
+        final Interpolator interpolator = new LinearInterpolator();
+
+        final LatLng startLatLng = marker.getPosition();
+
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                long elapsed = SystemClock.uptimeMillis() - start;
+                float t = interpolator.getInterpolation((float) elapsed / duration);
+
+                double lat = t * toPosition.latitude + (1 - t) * startLatLng.latitude;
+                double lng = t * toPosition.longitude + (1 - t) * startLatLng.longitude;
+                marker.setPosition(new LatLng(lat, lng));
+
+                if (t < 1.0) {
+                    handler.postDelayed(this, 16); // 60fps
+                }
+            }
+        });
+    }
+
 
     private void resetRideUI() {
         payButton.setText("Pay Now");
@@ -700,6 +793,27 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         }
 
         locationCard.setVisibility(View.GONE);
+
+        // Clean up map elements
+        if (bikeMarker != null) {
+            bikeMarker.remove();
+            bikeMarker = null;
+        }
+        if (ridePath != null) {
+            ridePath.remove();
+            ridePath = null;
+        }
+        ridePathPoints.clear();
+
+        // Reset map camera to show the entire boundary
+        if (antelBoundary != null && !antelBoundary.isEmpty()) {
+            LatLngBounds.Builder builder = new LatLngBounds.Builder();
+            for (LatLng point : antelBoundary) {
+                builder.include(point);
+            }
+            LatLngBounds bounds = builder.build();
+            mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100));
+        }
     }
 
 
@@ -712,6 +826,8 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         // Draw Antel Grand Village geofence
         listenToGeofenceChanges();
 
+        // Load all available bikes on map
+        loadAllBikes();
 
         // Remove any "destination" logic (markers are just visual now)
         mMap.setOnMarkerClickListener(marker -> {
@@ -719,6 +835,11 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             return false;
 
         });
+        
+        // Ensure user marker is created if location is already available
+        if (currentLocation != null && userMarker == null) {
+            createUserMarker();
+        }
     }
 
     private void addPredefinedMarker(String title, LatLng coords) {
@@ -874,8 +995,8 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     @SuppressWarnings("deprecation")
     private void startLocationUpdates() {
         locationRequest = LocationRequest.create()
-                .setInterval(5000)
-                .setFastestInterval(2000)
+                .setInterval(2000)  // Update every 2 seconds
+                .setFastestInterval(1000)
                 .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
 
         locationCallback = new LocationCallback() {
@@ -886,11 +1007,45 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 Location loc = locationResult.getLastLocation();
                 LatLng currentLatLng = new LatLng(loc.getLatitude(), loc.getLongitude());
 
-                // Polygon check for precision
-                if (!PolyUtil.containsLocation(currentLatLng, antelBoundary, true)) {
-                    Toast.makeText(MainPage.this, "Outside village boundary!", Toast.LENGTH_LONG).show();
+                // Update current location
+                currentLocation = currentLatLng;
+
+                // Always update user marker position
+                if (userMarker != null) {
+                    animateMarker(userMarker, currentLatLng);
                 } else {
-                    Log.d("GEOFENCE", "Inside village boundary");
+                    createUserMarker();
+                }
+                
+                Log.d("MainPage", "Location updated: " + currentLatLng + ", userMarker exists: " + (userMarker != null));
+
+                // Update marker visibility based on proximity to rented bike
+                if (transactionAuthorized && rentedBikeId != null) {
+                    updateMarkerVisibility();
+                }
+
+                // Update ride path if ride is active
+                if (transactionAuthorized) {
+                    ridePathPoints.add(currentLatLng);
+                    if (ridePath != null) {
+                        ridePath.remove();
+                    }
+                    ridePath = mMap.addPolyline(new PolylineOptions()
+                            .addAll(ridePathPoints)
+                            .color(Color.BLUE)
+                            .width(10));
+
+                    // Move camera to follow the bike
+                    mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 18f));
+                }
+
+                // Polygon check for precision
+                if (antelBoundary != null && !antelBoundary.isEmpty()) {
+                    if (!PolyUtil.containsLocation(currentLatLng, antelBoundary, true)) {
+                        Toast.makeText(MainPage.this, "Outside village boundary!", Toast.LENGTH_LONG).show();
+                    } else {
+                        Log.d("GEOFENCE", "Inside village boundary");
+                    }
                 }
             }
         };
@@ -915,10 +1070,260 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                         currentLocation = new LatLng(loc.getLatitude(), loc.getLongitude());
                         mMap.setMyLocationEnabled(true);
                         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
+                        
+                        // Create user marker immediately when location is available
+                        createUserMarker();
+                        
+                        // Start continuous location updates
+                        startLocationUpdates();
+                        
+                        Log.d("MainPage", "Location obtained: " + currentLocation);
                     } else {
                         Toast.makeText(this, "Unable to fetch location", Toast.LENGTH_SHORT).show();
+                        Log.e("MainPage", "Location is null");
                     }
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("MainPage", "Failed to get location", e);
+                    Toast.makeText(this, "Failed to get location: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 });
+    }
+    
+    /**
+     * Create user marker on the map with profile picture
+     */
+    private void createUserMarker() {
+        if (currentLocation == null) return;
+        
+        // Remove existing user marker if any
+        if (userMarker != null) {
+            userMarker.remove();
+        }
+        
+        // Load profile image and create marker
+        loadProfileImageAndCreateUserMarker(currentLocation);
+        
+        Log.d("MainPage", "User marker created at: " + currentLocation);
+    }
+    
+    /**
+     * Load profile image from Firebase and create user marker
+     */
+    private void loadProfileImageAndCreateUserMarker(LatLng position) {
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (currentUser != null) {
+            firestore.collection("users").document(currentUser.getUid())
+                    .get()
+                    .addOnSuccessListener(documentSnapshot -> {
+                        if (documentSnapshot.exists()) {
+                            String profileImageUrl = documentSnapshot.getString("profileImageUrl");
+                            if (profileImageUrl != null && !profileImageUrl.isEmpty()) {
+                                // Load image using Picasso
+                                new Thread(() -> {
+                                    try {
+                                        Bitmap profileBitmap = com.squareup.picasso.Picasso.get()
+                                                .load(profileImageUrl)
+                                                .resize(200, 200)
+                                                .centerCrop()
+                                                .get();
+                                        
+                                        runOnUiThread(() -> {
+                                            BitmapDescriptor markerIcon = createUserMarkerWithProfileImage(profileBitmap);
+                                            MarkerOptions markerOptions = new MarkerOptions()
+                                                    .position(position)
+                                                    .title("You")
+                                                    .icon(markerIcon)
+                                                    .anchor(0.5f, 1.0f);
+                                            userMarker = mMap.addMarker(markerOptions);
+                                        });
+                                    } catch (Exception e) {
+                                        Log.e("UserMarker", "Error loading profile image", e);
+                                        runOnUiThread(() -> createDefaultUserMarker(position));
+                                    }
+                                }).start();
+                            } else {
+                                createDefaultUserMarker(position);
+                            }
+                        } else {
+                            createDefaultUserMarker(position);
+                        }
+                    })
+                    .addOnFailureListener(e -> createDefaultUserMarker(position));
+        } else {
+            createDefaultUserMarker(position);
+        }
+    }
+    
+    /**
+     * Create default user marker (FULL BLUE teardrop)
+     */
+    private void createDefaultUserMarker(LatLng position) {
+        // Create custom FULL BLUE teardrop marker
+        BitmapDescriptor blueTeardropIcon = createSolidBlueTeardropMarker();
+        
+        MarkerOptions markerOptions = new MarkerOptions()
+                .position(position)
+                .title("You")
+                .icon(blueTeardropIcon)
+                .anchor(0.5f, 1.0f);
+        userMarker = mMap.addMarker(markerOptions);
+    }
+    
+    /**
+     * Create solid blue teardrop marker (no white background)
+     */
+    private BitmapDescriptor createSolidBlueTeardropMarker() {
+        int markerSize = 120;
+        int tailHeight = 30;
+        Bitmap markerBitmap = Bitmap.createBitmap(markerSize, markerSize + tailHeight, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(markerBitmap);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        float centerX = markerSize / 2f;
+        float centerY = markerSize / 2f;
+        float radius = markerSize / 2f;
+
+        // Create teardrop path
+        Path teardropPath = new Path();
+        teardropPath.addCircle(centerX, centerY, radius, Path.Direction.CW);
+        teardropPath.moveTo(centerX - 12, centerY + radius - 8);
+        teardropPath.lineTo(centerX, markerSize + tailHeight);
+        teardropPath.lineTo(centerX + 12, centerY + radius - 8);
+        teardropPath.close();
+
+        // Draw FULL BLUE teardrop (no white background)
+        paint.setColor(Color.BLUE);
+        paint.setStyle(Paint.Style.FILL);
+        canvas.drawPath(teardropPath, paint);
+
+        return BitmapDescriptorFactory.fromBitmap(markerBitmap);
+    }
+    
+    /**
+     * Create user marker with profile image (FULL BLUE teardrop with profile picture)
+     */
+    private BitmapDescriptor createUserMarkerWithProfileImage(Bitmap profileBitmap) {
+        // Larger marker size for better visibility
+        int markerSize = 140;
+        int tailHeight = 40;
+        Bitmap markerBitmap = Bitmap.createBitmap(markerSize, markerSize + tailHeight, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(markerBitmap);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        float centerX = markerSize / 2f;
+        float centerY = markerSize / 2f;
+        float radius = markerSize / 2f;
+
+        // Create teardrop path
+        Path teardropPath = new Path();
+        teardropPath.addCircle(centerX, centerY, radius, Path.Direction.CW);
+        teardropPath.moveTo(centerX - 15, centerY + radius - 10);
+        teardropPath.lineTo(centerX, markerSize + tailHeight);
+        teardropPath.lineTo(centerX + 15, centerY + radius - 10);
+        teardropPath.close();
+
+        // Draw FULL BLUE teardrop (no white background) - USER MARKER IS FULL BLUE
+        paint.setColor(Color.BLUE);
+        paint.setStyle(Paint.Style.FILL);
+        canvas.drawPath(teardropPath, paint);
+
+        // Draw profile image fitted inside the circular part of teardrop
+        if (profileBitmap != null) {
+            canvas.save();
+            
+            // Create circular clip path for profile image (smaller than outer circle for blue border)
+            Path clipPath = new Path();
+            float imageRadius = radius - 12; // 12px blue border
+            clipPath.addCircle(centerX, centerY, imageRadius, Path.Direction.CW);
+            canvas.clipPath(clipPath);
+
+            // Scale and draw profile image to fill the circle
+            int imageSize = (int)(imageRadius * 2);
+            Bitmap scaledProfile = Bitmap.createScaledBitmap(profileBitmap, imageSize, imageSize, true);
+            
+            Paint imagePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            imagePaint.setFilterBitmap(true);
+            
+            canvas.drawBitmap(scaledProfile, centerX - imageRadius, centerY - imageRadius, imagePaint);
+            canvas.restore();
+        }
+
+        return BitmapDescriptorFactory.fromBitmap(markerBitmap);
+    }
+    
+    /**
+     * Create available bike marker (FULL GREEN teardrop)
+     */
+    private BitmapDescriptor createAvailableBikeMarker() {
+        int markerSize = 120;
+        int tailHeight = 30;
+        Bitmap markerBitmap = Bitmap.createBitmap(markerSize, markerSize + tailHeight, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(markerBitmap);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        float centerX = markerSize / 2f;
+        float centerY = markerSize / 2f;
+        float radius = markerSize / 2f;
+
+        // Create teardrop path
+        Path teardropPath = new Path();
+        teardropPath.addCircle(centerX, centerY, radius, Path.Direction.CW);
+        teardropPath.moveTo(centerX - 12, centerY + radius - 8);
+        teardropPath.lineTo(centerX, markerSize + tailHeight);
+        teardropPath.lineTo(centerX + 12, centerY + radius - 8);
+        teardropPath.close();
+
+        // Draw FULL GREEN teardrop (no white background) - AVAILABLE BIKE IS FULL GREEN
+        paint.setColor(Color.GREEN);
+        paint.setStyle(Paint.Style.FILL);
+        canvas.drawPath(teardropPath, paint);
+
+        // Draw white bike icon inside the green teardrop
+        paint.setColor(Color.WHITE);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setTextSize(radius * 0.6f);
+        paint.setTextAlign(Paint.Align.CENTER);
+        
+        // Draw bike icon (simple bike symbol)
+        canvas.drawText("🚲", centerX, centerY + radius * 0.2f, paint);
+
+        return BitmapDescriptorFactory.fromBitmap(markerBitmap);
+    }
+    
+    /**
+     * Create rented bike marker (white circle with bike design)
+     */
+    private BitmapDescriptor createRentedBikeMarker() {
+        int markerSize = 100;
+        Bitmap markerBitmap = Bitmap.createBitmap(markerSize, markerSize, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(markerBitmap);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        float centerX = markerSize / 2f;
+        float centerY = markerSize / 2f;
+        float radius = markerSize / 2f;
+
+        // Draw white circle background
+        paint.setColor(Color.WHITE);
+        paint.setStyle(Paint.Style.FILL);
+        canvas.drawCircle(centerX, centerY, radius, paint);
+
+        // Draw black border
+        paint.setColor(Color.BLACK);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(3);
+        canvas.drawCircle(centerX, centerY, radius - 2, paint);
+
+        // Draw bike icon in the center
+        paint.setColor(Color.BLACK);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setTextSize(radius * 0.6f);
+        paint.setTextAlign(Paint.Align.CENTER);
+        
+        // Draw bike icon (simple bike symbol)
+        canvas.drawText("🚲", centerX, centerY + radius * 0.2f, paint);
+
+        return BitmapDescriptorFactory.fromBitmap(markerBitmap);
     }
 
 
@@ -1015,50 +1420,183 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         });
     }
 
+    // Cache user data to avoid repeated Firebase calls
+    public static String cachedUsername = "";
+    public static String cachedPhone = "";
+    public static String cachedProfileImageUrl = "";
+    public static String cachedEmail = "";
+    public static boolean dataLoaded = false;
+
+    // Convert phone number from +63 format to 09 format for display
+    private String formatPhoneForDisplay(String phone) {
+        if (phone == null || phone.isEmpty()) {
+            return "Phone not set";
+        }
+        // Convert +63XXXXXXXXXX to 09XXXXXXXXXX
+        if (phone.startsWith("+63")) {
+            return "0" + phone.substring(3);
+        }
+        // Convert 63XXXXXXXXXX to 09XXXXXXXXXX
+        if (phone.startsWith("63") && phone.length() == 12) {
+            return "0" + phone.substring(2);
+        }
+        // Already in correct format or unknown format
+        return phone;
+    }
+
+    private void updatePhoneDisplay(TextView phoneView, String phoneNumber) {
+        if (phoneNumber == null || phoneNumber.isEmpty() || phoneNumber.equals("Phone not set")) {
+            phoneView.setText("Phone not set");
+            return;
+        }
+
+        if (isPhoneVisible) {
+            phoneView.setText(phoneNumber);
+        } else {
+            // Mask first 6 digits
+            if (phoneNumber.length() > 6) {
+                String masked = "******" + phoneNumber.substring(6);
+                phoneView.setText(masked);
+            } else {
+                phoneView.setText("******");
+            }
+        }
+    }
+
     private void loadUserProfileData(View headerView) {
         TextView profileName = headerView.findViewById(R.id.profileName);
         TextView profileEmail = headerView.findViewById(R.id.profileEmail);
+        TextView profilePhone = headerView.findViewById(R.id.profilePhone);
         ImageView profileImage = headerView.findViewById(R.id.profileImage);
+        ImageButton togglePhoneVisibility = headerView.findViewById(R.id.togglePhoneVisibility);
         
         // Get current Firebase user
         FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        Log.d("MainPage", "Loading user profile data. Current user: " + (currentUser != null ? currentUser.getUid() : "null"));
+        
         if (currentUser != null && currentUser.getEmail() != null) {
-            // Set email from Firebase Auth
-            profileEmail.setText(currentUser.getEmail());
             
-            // Get username from Firestore
+            // Load cached data immediately for instant display
+            if (dataLoaded) {
+                profileEmail.setText(cachedEmail);
+                profileName.setText(cachedUsername.isEmpty() ? "User Name" : cachedUsername);
+                
+                // Set up phone number masking - convert to 09 format for display
+                originalPhoneNumber = formatPhoneForDisplay(cachedPhone);
+                updatePhoneDisplay(profilePhone, originalPhoneNumber);
+                
+                // Set up visibility toggle
+                if (togglePhoneVisibility != null) {
+                    togglePhoneVisibility.setSelected(isPhoneVisible);
+                    togglePhoneVisibility.setOnClickListener(v -> {
+                        isPhoneVisible = !isPhoneVisible;
+                        togglePhoneVisibility.setSelected(isPhoneVisible);
+                        updatePhoneDisplay(profilePhone, originalPhoneNumber);
+                    });
+                }
+                
+                // Load cached profile image
+                if (!cachedProfileImageUrl.isEmpty()) {
+                    com.squareup.picasso.Picasso.get()
+                        .load(cachedProfileImageUrl)
+                        .placeholder(R.drawable.baseline_person_outline_24)
+                        .error(R.drawable.baseline_person_outline_24)
+                        .into(profileImage);
+                }
+            } else {
+                // Set email from Firebase Auth immediately
+                cachedEmail = currentUser.getEmail();
+                profileEmail.setText(cachedEmail);
+            }
+            
+            // Only fetch from Firebase if we don't have cached data or need to refresh
+            if (!dataLoaded) {
+                Log.d("MainPage", "Fetching user data from Firestore for user: " + currentUser.getUid());
             FirebaseFirestore db = FirebaseFirestore.getInstance();
             db.collection("users").document(currentUser.getUid())
                 .get()
                 .addOnSuccessListener(documentSnapshot -> {
+                        Log.d("MainPage", "Firestore query successful. Document exists: " + documentSnapshot.exists());
                     if (documentSnapshot.exists()) {
                         String username = documentSnapshot.getString("username");
+                            String phone = documentSnapshot.getString("phone");
                         String profileImageUrl = documentSnapshot.getString("profileImageUrl");
                         
-                        if (username != null && !username.isEmpty()) {
-                            profileName.setText(username);
-                        }
-                        
-                        // Load profile image if it exists
-                        if (profileImageUrl != null && !profileImageUrl.isEmpty()) {
-                            // Use Picasso library to load and cache the image
+                            Log.d("MainPage", "Retrieved data - username: " + username + ", phone: " + phone + ", imageUrl: " + profileImageUrl);
+                            
+                            // Cache the data
+                            cachedUsername = username != null ? username : "";
+                            cachedPhone = phone != null ? phone : "";
+                            cachedProfileImageUrl = profileImageUrl != null ? profileImageUrl : "";
+                            dataLoaded = true;
+                            
+                            // Update UI with fresh data
+                            profileName.setText(cachedUsername.isEmpty() ? "User Name" : cachedUsername);
+                            
+                            // Set up phone masking for fresh data - convert to 09 format for display
+                            originalPhoneNumber = formatPhoneForDisplay(cachedPhone);
+                            updatePhoneDisplay(profilePhone, originalPhoneNumber);
+                            
+                            // Set up visibility toggle for fresh data
+                            if (togglePhoneVisibility != null) {
+                                togglePhoneVisibility.setSelected(isPhoneVisible);
+                                togglePhoneVisibility.setOnClickListener(v -> {
+                                    isPhoneVisible = !isPhoneVisible;
+                                    togglePhoneVisibility.setSelected(isPhoneVisible);
+                                    updatePhoneDisplay(profilePhone, originalPhoneNumber);
+                                });
+                            }
+                            
+                            Log.d("MainPage", "Updated UI with cached data");
+                            
+                            // Load profile image
+                            if (!cachedProfileImageUrl.isEmpty()) {
                             com.squareup.picasso.Picasso.get()
-                                .load(profileImageUrl)
+                                    .load(cachedProfileImageUrl)
                                 .placeholder(R.drawable.baseline_person_outline_24)
                                 .error(R.drawable.baseline_person_outline_24)
                                 .into(profileImage);
                         }
+                        } else {
+                            Log.d("MainPage", "User document does not exist in Firestore");
+                            dataLoaded = true; // Mark as loaded to prevent repeated attempts
                     }
                 })
                 .addOnFailureListener(e -> {
+                        Log.e("MainPage", "Error fetching user data from Firestore", e);
                     // In case of error, leave default text
-                });
+                        dataLoaded = true; // Mark as loaded to prevent repeated attempts
+                    });
+            } else {
+                Log.d("MainPage", "Using cached data, dataLoaded: " + dataLoaded);
+            }
+        }
+    }
+
+    // Method to refresh cache when profile data is updated
+    public static void refreshUserCache() {
+        dataLoaded = false;
+        cachedUsername = "";
+        cachedPhone = "";
+        cachedProfileImageUrl = "";
+        cachedEmail = "";
+    }
+
+    // Method to force refresh navigation header data
+    public void refreshNavigationHeader() {
+        refreshUserCache();
+        View headerView = navigationView.getHeaderView(0);
+        if (headerView != null) {
+            loadUserProfileData(headerView);
         }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        
+        // Force refresh navigation header data when returning to the page
+        refreshNavigationHeader();
         
         // Refresh user profile data in navigation header when returning to this screen
         View headerView = navigationView.getHeaderView(0);
@@ -1071,12 +1609,367 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         listenToBikeStatus();
     }
 
+    // Listen to bike status changes in Firebase Realtime Database
+    private void listenToBikeStatus() {
+        if (currentUserId == null) {
+            Log.d("MainPage", "No current user ID, skipping bike status listener");
+            return;
+        }
+        
+        // Listen to bike status for the current user
+        bikeStatusRef = FirebaseDatabase.getInstance()
+            .getReference("bikeStatus")
+            .child(currentUserId);
+            
+        bikeListener = new com.google.firebase.database.ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull com.google.firebase.database.DataSnapshot snapshot) {
+                if (snapshot.exists()) {
+                    String status = snapshot.getValue(String.class);
+                    Log.d("MainPage", "Bike status updated: " + status);
+                    // Handle bike status changes here if needed
+                }
+            }
+            
+            @Override
+            public void onCancelled(@NonNull com.google.firebase.database.DatabaseError error) {
+                Log.e("MainPage", "Bike status listener cancelled: " + error.getMessage());
+            }
+        };
+        
+        bikeStatusRef.addValueEventListener(bikeListener);
+    }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (bikeListener != null) {
-            bikeListener.remove();
+        if (bikeListener != null && bikeStatusRef != null) {
+            bikeStatusRef.removeEventListener(bikeListener);
             bikeListener = null;
+            bikeStatusRef = null;
+        }
+    }
+
+    private void updateLastLoginTimestamp() {
+        if (currentUserId != null) {
+            Map<String, Object> update = new HashMap<>();
+            update.put("lastLoginTimestamp", System.currentTimeMillis());
+
+            firestore.collection("users").document(currentUserId)
+                    .update(update)
+                    .addOnSuccessListener(aVoid -> Log.d("MainPage", "Last login timestamp updated"))
+                    .addOnFailureListener(e -> Log.e("MainPage", "Failed to update last login timestamp", e));
+        }
+    }
+
+    // ==================== BIKE RENTAL GPS LOGIC ====================
+    
+    /**
+     * Load all available bikes from Firebase and display them on the map
+     * Combines GPS data from Realtime Database with bike status from Firestore
+     */
+    private void loadAllBikes() {
+        if (mMap == null) return;
+        
+        Log.d("BikeRental", "Loading all bikes from Firebase (gpsData + Firestore bikes)");
+        
+        // Listen to GPS data from Realtime Database
+        bikesRef.addValueEventListener(new com.google.firebase.database.ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull com.google.firebase.database.DataSnapshot snapshot) {
+                // Only load bikes if no active rental
+                if (rentedBikeId != null) {
+                    Log.d("BikeRental", "Active rental exists, skipping bike load");
+                    return;
+                }
+                
+                // Clear existing bike markers
+                for (Marker marker : allBikeMarkers.values()) {
+                    marker.remove();
+                }
+                allBikeMarkers.clear();
+                
+                // Add marker for each bike in gpsData
+                for (com.google.firebase.database.DataSnapshot bikeSnapshot : snapshot.getChildren()) {
+                    String bikeId = bikeSnapshot.getKey();
+                    
+                    // Get bike location from gpsData/bike_xxx/latest/
+                    com.google.firebase.database.DataSnapshot latestSnapshot = bikeSnapshot.child("latest");
+                    
+                    // Parse latitude and longitude as strings
+                    String latStr = latestSnapshot.child("latitude").getValue(String.class);
+                    String lngStr = latestSnapshot.child("longitude").getValue(String.class);
+                    
+                    if (latStr != null && lngStr != null && bikeId != null) {
+                        try {
+                            double lat = Double.parseDouble(latStr);
+                            double lng = Double.parseDouble(lngStr);
+                            LatLng bikeLocation = new LatLng(lat, lng);
+                            
+                            // Get bike status from Firestore bikes collection
+                            final String finalBikeId = bikeId;
+                            firestore.collection("bikes").document(bikeId)
+                                    .get()
+                                    .addOnSuccessListener(document -> {
+                                        boolean isAvailable = true;
+                                        boolean isActive = false;
+                                        
+                                        if (document.exists()) {
+                                            String status = document.getString("status");
+                                            Boolean active = document.getBoolean("isActive");
+                                            String rentedBy = document.getString("rentedBy");
+                                            
+                                            // Bike is available if: status is "available" AND not currently rented
+                                            isAvailable = "available".equals(status) && (rentedBy == null || rentedBy.isEmpty());
+                                            isActive = active != null && active;
+                                            
+                                            Log.d("BikeRental", "Bike " + finalBikeId + " - status: " + status + 
+                                                  ", isActive: " + isActive + ", rentedBy: " + rentedBy + ", available: " + isAvailable);
+                                        } else {
+                                            Log.w("BikeRental", "Bike document not found in Firestore: " + finalBikeId);
+                                        }
+                                        
+                                        // Create bike marker with appropriate design
+                                        BitmapDescriptor markerIcon;
+                                        if (isAvailable) {
+                                            // Green teardrop for available bikes
+                                            markerIcon = createAvailableBikeMarker();
+                                        } else {
+                                            // White circle with bike design for rented bikes
+                                            markerIcon = createRentedBikeMarker();
+                                        }
+                                        
+                                        MarkerOptions markerOptions = new MarkerOptions()
+                                                .position(bikeLocation)
+                                                .title("Bike " + finalBikeId)
+                                                .snippet(isAvailable ? "Available" : "Rented")
+                                                .icon(markerIcon)
+                                                .anchor(0.5f, 1.0f);
+                                        
+                                        Marker marker = mMap.addMarker(markerOptions);
+                                        allBikeMarkers.put(finalBikeId, marker);
+                                        
+                                        Log.d("BikeRental", "✓ Added " + (isAvailable ? "available" : "rented") + 
+                                              " bike marker: " + finalBikeId + " at " + bikeLocation);
+                                    })
+                                    .addOnFailureListener(e -> {
+                                        Log.e("BikeRental", "Failed to get bike status for: " + finalBikeId, e);
+                                        // Still add marker as unknown status (blue)
+                                        MarkerOptions markerOptions = new MarkerOptions()
+                                                .position(bikeLocation)
+                                                .title("Bike " + finalBikeId)
+                                                .snippet("Status unknown")
+                                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))
+                                                .anchor(0.5f, 1.0f);
+                                        
+                                        Marker marker = mMap.addMarker(markerOptions);
+                                        allBikeMarkers.put(finalBikeId, marker);
+                                    });
+                            
+                        } catch (NumberFormatException e) {
+                            Log.e("BikeRental", "Failed to parse coordinates for bike: " + bikeId, e);
+                        }
+                    }
+                }
+                
+                Log.d("BikeRental", "Bikes loading completed from gpsData");
+            }
+            
+            @Override
+            public void onCancelled(@NonNull com.google.firebase.database.DatabaseError error) {
+                Log.e("BikeRental", "Failed to load bikes from gpsData: " + error.getMessage());
+            }
+        });
+    }
+    
+    /**
+     * Start a bike rental - hide all other bikes, show only rented bike
+     * @param bikeId The ID of the rented bike
+     */
+    private void startRental(String bikeId) {
+        rentedBikeId = bikeId;
+        Log.d("BikeRental", "Starting rental for bike: " + bikeId);
+        
+        // Update bike status in Firestore
+        Map<String, Object> rentalUpdate = new HashMap<>();
+        rentalUpdate.put("status", "rented");
+        rentalUpdate.put("rentedBy", currentUserId);
+        rentalUpdate.put("rentalStartTime", System.currentTimeMillis());
+        
+        firestore.collection("bikes").document(bikeId)
+                .update(rentalUpdate)
+                .addOnSuccessListener(aVoid -> {
+                    Log.d("BikeRental", "✓ Bike status updated to 'rented' in Firestore");
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("BikeRental", "Failed to update bike status in Firestore", e);
+                });
+        
+        // Hide all bike markers
+        hideAllBikeMarkers();
+        
+        // Listen to rented bike GPS updates
+        listenToRentedBikeGPS(bikeId);
+        
+        Toast.makeText(this, "Rental started for bike " + bikeId, Toast.LENGTH_SHORT).show();
+    }
+    
+    /**
+     * End the bike rental - show all bikes again
+     */
+    private void endRental() {
+        if (rentedBikeId == null) {
+            Log.w("BikeRental", "endRental called but no active rental");
+            return;
+        }
+        
+        Log.d("BikeRental", "Ending rental for bike: " + rentedBikeId);
+        
+        // Update bike status in Firestore back to available
+        Map<String, Object> rentalEndUpdate = new HashMap<>();
+        rentalEndUpdate.put("status", "available");
+        rentalEndUpdate.put("rentedBy", null);
+        rentalEndUpdate.put("rentalEndTime", System.currentTimeMillis());
+        
+        final String endedBikeId = rentedBikeId;
+        firestore.collection("bikes").document(rentedBikeId)
+                .update(rentalEndUpdate)
+                .addOnSuccessListener(aVoid -> {
+                    Log.d("BikeRental", "✓ Bike " + endedBikeId + " status updated to 'available' in Firestore");
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("BikeRental", "Failed to update bike status in Firestore", e);
+                });
+        
+        // Remove rented bike marker
+        if (bikeMarker != null) {
+            bikeMarker.remove();
+            bikeMarker = null;
+        }
+        
+        // Remove user marker
+        if (userMarker != null) {
+            userMarker.remove();
+            userMarker = null;
+        }
+        
+        rentedBikeId = null;
+        rentedBikeLocation = null;
+        
+        // Show all bikes again
+        loadAllBikes();
+        
+        Toast.makeText(this, "Rental ended. All bikes visible again.", Toast.LENGTH_SHORT).show();
+    }
+    
+    /**
+     * Hide all bike markers during rental
+     */
+    private void hideAllBikeMarkers() {
+        for (Marker marker : allBikeMarkers.values()) {
+            marker.setVisible(false);
+        }
+        Log.d("BikeRental", "Hidden " + allBikeMarkers.size() + " bike markers");
+    }
+    
+    /**
+     * Listen to rented bike's GPS location from Firebase
+     * @param bikeId The rented bike's ID
+     */
+    private void listenToRentedBikeGPS(String bikeId) {
+        // Listen to gpsData/bike_xxx/latest/
+        DatabaseReference rentedBikeRef = bikesRef.child(bikeId).child("latest");
+        
+        rentedBikeRef.addValueEventListener(new com.google.firebase.database.ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull com.google.firebase.database.DataSnapshot snapshot) {
+                if (!transactionAuthorized || !bikeId.equals(rentedBikeId)) {
+                    return; // Rental ended or different bike
+                }
+                
+                // Parse latitude and longitude as strings
+                String latStr = snapshot.child("latitude").getValue(String.class);
+                String lngStr = snapshot.child("longitude").getValue(String.class);
+                
+                if (latStr != null && lngStr != null) {
+                    try {
+                        double lat = Double.parseDouble(latStr);
+                        double lng = Double.parseDouble(lngStr);
+                        rentedBikeLocation = new LatLng(lat, lng);
+                        
+                        // Update or create bike marker
+                        if (bikeMarker == null) {
+                            MarkerOptions markerOptions = new MarkerOptions()
+                                    .position(rentedBikeLocation)
+                                    .title("Your Bike")
+                                    .icon(createAvailableBikeMarker()) // Use green teardrop for rented bike
+                                    .anchor(0.5f, 1.0f);
+                            bikeMarker = mMap.addMarker(markerOptions);
+                        } else {
+                            animateMarker(bikeMarker, rentedBikeLocation);
+                        }
+                        
+                        // Update marker visibility based on distance
+                        updateMarkerVisibility();
+                        
+                        Log.d("BikeRental", "Rented bike location updated: " + rentedBikeLocation);
+                    } catch (NumberFormatException e) {
+                        Log.e("BikeRental", "Failed to parse bike coordinates", e);
+                    }
+                }
+            }
+            
+            @Override
+            public void onCancelled(@NonNull com.google.firebase.database.DatabaseError error) {
+                Log.e("BikeRental", "Failed to get rented bike location: " + error.getMessage());
+            }
+        });
+    }
+    
+    /**
+     * Calculate distance between user and rented bike
+     * Show/hide user marker based on proximity
+     */
+    private void updateMarkerVisibility() {
+        if (currentLocation == null || rentedBikeLocation == null || !transactionAuthorized) {
+            return;
+        }
+        
+        // Calculate distance between user and bike
+        float[] results = new float[1];
+        Location.distanceBetween(
+                currentLocation.latitude, currentLocation.longitude,
+                rentedBikeLocation.latitude, rentedBikeLocation.longitude,
+                results
+        );
+        float distanceMeters = results[0];
+        
+        Log.d("BikeRental", "Distance between user and bike: " + distanceMeters + "m");
+        
+        // If user is close to bike (< 30 meters), hide user marker
+        if (distanceMeters < PROXIMITY_THRESHOLD_METERS) {
+            // Hide user marker, show only bike
+            if (userMarker != null) {
+                userMarker.setVisible(false);
+            }
+            if (bikeMarker != null) {
+                bikeMarker.setVisible(true);
+            }
+            Log.d("BikeRental", "User close to bike - hiding user marker");
+        } else {
+            // User is far from bike, show both markers
+            if (userMarker == null) {
+                // Create user marker if it doesn't exist
+                createUserMarker();
+            } else {
+                userMarker.setVisible(true);
+                animateMarker(userMarker, currentLocation);
+            }
+            
+            if (bikeMarker != null) {
+                bikeMarker.setVisible(true);
+            }
+            Log.d("BikeRental", "User far from bike - showing both markers");
         }
     }
 }
