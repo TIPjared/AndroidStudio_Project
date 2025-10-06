@@ -136,11 +136,6 @@
             android:label="@string/ride_history"
             android:parentActivityName=".MainPage" />
         <activity
-            android:name=".RideDetailsActivity"
-            android:exported="false"
-            android:label="Ride Details"
-            android:parentActivityName=".RideHistoryActivity" />
-        <activity
             android:name=".SupportFeedbackActivity"
             android:exported="false"
             android:label="@string/support_feedback_title"
@@ -190,6 +185,11 @@
             android:exported="false"
             android:label="Contact Support"
             android:parentActivityName=".SupportFeedbackActivity" />
+        <activity
+            android:name=".RideDetailsActivity"
+            android:exported="false"
+            android:label="Ride Details"
+            android:parentActivityName=".RideDurationActivity" />
     </application>
 
 </manifest>

@@ -59,8 +59,8 @@ public class RideDurationActivity extends AppCompatActivity {
         // Save to AppData
         AppData.getInstance().setRideTime(duration);
 
-        // Navigate to QR Scanner
-        Intent intent = new Intent(RideDurationActivity.this, QRScannerActivity.class);
+        // Navigate to Ride Details
+        Intent intent = new Intent(RideDurationActivity.this, RideDetailsActivity.class);
         startActivity(intent);
         finish(); // Finish this activity to prevent going back
     }

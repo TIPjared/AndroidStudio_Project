@@ -104,7 +104,7 @@
                 android:id="@+id/infoText"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:text="Select your preferred ride duration. You can extend your ride later if needed."
+                android:text="Select your preferred ride duration"
                 android:textColor="@color/textSecondary"
                 android:textSize="16sp"
                 android:gravity="center"
@@ -130,7 +130,8 @@
                     android:id="@+id/btn30Minutes"
                     android:layout_width="match_parent"
                     android:layout_height="64dp"
-                    android:text="30 Minutes"
+
+                    android:text="Short Ride"
                     android:textSize="18sp"
                     android:textStyle="bold"
                     android:textColor="@android:color/white"
@@ -148,7 +149,7 @@
                     android:id="@+id/btn45Minutes"
                     android:layout_width="match_parent"
                     android:layout_height="64dp"
-                    android:text="45 Minutes"
+                    android:text="Cruise"
                     android:textSize="18sp"
                     android:textStyle="bold"
                     android:textColor="@android:color/white"
@@ -166,7 +167,7 @@
                     android:id="@+id/btn1Hour"
                     android:layout_width="match_parent"
                     android:layout_height="64dp"
-                    android:text="1 Hour"
+                    android:text="Long Ride"
                     android:textSize="18sp"
                     android:textStyle="bold"
                     android:textColor="@android:color/white"
@@ -180,45 +181,124 @@
 
             </LinearLayout>
 
-            <!-- Additional Info Card -->
+            <!-- Ride Information Card -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/infoCard"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="4dp"
-                app:cardBackgroundColor="@color/cardBackgroundLight"
-                app:layout_constraintBottom_toBottomOf="parent"
+                app:cardBackgroundColor="#F5F5F5"
+                android:layout_marginTop="24dp"
+                app:layout_constraintTop_toBottomOf="@+id/durationContainer"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintEnd_toEndOf="parent">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:padding="16dp"
-                    android:gravity="center_vertical">
+                    android:orientation="vertical"
+                    android:padding="20dp">
 
-                    <ImageView
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/baseline_info_24"
-                        android:tint="@color/colorPrimary"
-                        android:layout_marginEnd="12dp" />
-
+                    <!-- Info Title -->
                     <TextView
-                        android:layout_width="0dp"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="You can extend your ride duration anytime during your trip"
-                        android:textColor="@color/textSecondary"
-                        android:textSize="14sp"
-                        android:lineSpacingExtra="2dp" />
+                        android:text="Ride Duration Details"
+                        android:textColor="@color/colorPrimary"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:gravity="center"
+                        android:layout_marginBottom="16dp" />
+
+                    <!-- Short Ride Info -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginBottom="12dp">
+
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:src="@drawable/baseline_access_time_24"
+                            android:tint="@color/colorPrimary"
+                            android:layout_marginEnd="12dp" />
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Short Ride: Perfect for quick trips around the village (30 minutes)"
+                            android:textColor="@color/textPrimary"
+                            android:textSize="14sp"
+                            android:lineSpacingExtra="2dp" />
+                    </LinearLayout>
+
+                    <!-- Cruise Info -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginBottom="12dp">
+
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:src="@drawable/baseline_access_time_24"
+                            android:tint="@color/colorPrimary"
+                            android:layout_marginEnd="12dp" />
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Cruise: Ideal for leisurely rides and exploring (45 minutes)"
+                            android:textColor="@color/textPrimary"
+                            android:textSize="14sp"
+                            android:lineSpacingExtra="2dp" />
+                    </LinearLayout>
+
+                    <!-- Long Ride Info -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:src="@drawable/baseline_access_time_24"
+                            android:tint="@color/colorPrimary"
+                            android:layout_marginEnd="12dp" />
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Long Ride: Extended time for longer distances (1 hour)"
+                            android:textColor="@color/textPrimary"
+                            android:textSize="14sp"
+                            android:lineSpacingExtra="2dp" />
+                    </LinearLayout>
 
                 </LinearLayout>
 
             </com.google.android.material.card.MaterialCardView>
+
+            <!-- Bottom Note -->
+            <TextView
+                android:id="@+id/bottomNote"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:text="Choose the duration that best fits your journey"
+                android:textColor="@color/textSecondary"
+                android:textSize="13sp"
+                android:gravity="center"
+                android:layout_marginTop="16dp"
+                app:layout_constraintTop_toBottomOf="@+id/infoCard"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
 

@@ -17,10 +17,5 @@
 
     <!-- New Menu Items for Enhanced Experience -->
 
-    <item
-        android:id="@+id/nav_about"
-        android:title="About Sikad"
-        android:icon="@drawable/baseline_info_24"
-        android:checkable="true" />
 
 </menu>

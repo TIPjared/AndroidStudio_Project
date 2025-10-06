@@ -124,6 +124,23 @@ public class EditProfileActivity extends AppCompatActivity {
         profileImageCard = findViewById(R.id.profileImageCard);
     }
 
+    // Convert phone number from +63 format to 09 format for display
+    private String formatPhoneForDisplay(String phone) {
+        if (phone == null || phone.isEmpty()) {
+            return "Phone not set";
+        }
+        // Convert +63XXXXXXXXXX to 09XXXXXXXXXX
+        if (phone.startsWith("+63")) {
+            return "0" + phone.substring(3);
+        }
+        // Convert 63XXXXXXXXXX to 09XXXXXXXXXX
+        if (phone.startsWith("63") && phone.length() == 12) {
+            return "0" + phone.substring(2);
+        }
+        // Already in correct format or unknown format
+        return phone;
+    }
+
     private void loadUserData() {
         // Set the email address from Firebase Authentication immediately
         FirebaseUser currentUser = mAuth.getCurrentUser();
@@ -137,7 +154,7 @@ public class EditProfileActivity extends AppCompatActivity {
         if (MainPage.dataLoaded) {
             profileName.setText(MainPage.cachedUsername.isEmpty() ? "User Name" : MainPage.cachedUsername);
             usernameEditText.setText(MainPage.cachedUsername);
-            profilePhone.setText(MainPage.cachedPhone.isEmpty() ? "Phone not set" : MainPage.cachedPhone);
+            profilePhone.setText(formatPhoneForDisplay(MainPage.cachedPhone));
             
             if (!MainPage.cachedProfileImageUrl.isEmpty()) {
                 Picasso.get().load(MainPage.cachedProfileImageUrl)
@@ -172,7 +189,7 @@ public class EditProfileActivity extends AppCompatActivity {
                 genderEditText.setText(gender != null ? gender : "");
                 
                 if (phone != null && !phone.isEmpty()) {
-                    profilePhone.setText(phone);
+                    profilePhone.setText(formatPhoneForDisplay(phone));
                 }
 
                 // Load profile image if exists

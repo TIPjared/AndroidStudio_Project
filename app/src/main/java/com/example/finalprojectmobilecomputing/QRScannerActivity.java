@@ -163,6 +163,7 @@ public class QRScannerActivity extends AppCompatActivity {
                 // Save to AppData singleton
                 AppData.getInstance().setQrCode(cleanCode);
                 AppData.getInstance().setUserId(currentUserId);
+                AppData.getInstance().setBikeId(bikeId);
 
                 Intent i = new Intent(QRScannerActivity.this, PaymentActivity.class);
                 i.putExtra("qr_code", cleanCode);

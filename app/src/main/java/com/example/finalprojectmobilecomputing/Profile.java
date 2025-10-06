@@ -27,6 +27,9 @@ import androidx.cardview.widget.CardView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInClient;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentReference;
@@ -59,6 +62,7 @@ public class Profile extends AppCompatActivity {
     private StorageReference storageRef;
     private ImageView profileImage;
     private CardView profileImageCard;
+    private GoogleSignInClient mGoogleSignInClient;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -77,6 +81,13 @@ public class Profile extends AppCompatActivity {
         db = FirebaseFirestore.getInstance();
         storage = FirebaseStorage.getInstance();
         storageRef = storage.getReference();
+        
+        // Initialize Google Sign-In client for logout
+        GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken(getString(R.string.default_web_client_id))
+                .requestEmail()
+                .build();
+        mGoogleSignInClient = GoogleSignIn.getClient(this, gso);
         
         // Verify authentication status
         FirebaseUser currentUser = mAuth.getCurrentUser();
@@ -122,15 +133,17 @@ public class Profile extends AppCompatActivity {
         });
 
         logoutOption.setOnClickListener(v -> {
-            // Log out the user
+            // Log out the user from both Firebase and Google
             mAuth.signOut();
-            Toast.makeText(Profile.this, "Logged out successfully", Toast.LENGTH_SHORT).show();
-            
-            // Navigate to login screen
-            Intent intent = new Intent(Profile.this, MainActivity.class);
-            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-            startActivity(intent);
-            finish();
+            mGoogleSignInClient.signOut().addOnCompleteListener(this, task -> {
+                Toast.makeText(Profile.this, "Logged out successfully", Toast.LENGTH_SHORT).show();
+                
+                // Navigate to login screen
+                Intent intent = new Intent(Profile.this, MainActivity.class);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                startActivity(intent);
+                finish();
+            });
         });
     }
 
