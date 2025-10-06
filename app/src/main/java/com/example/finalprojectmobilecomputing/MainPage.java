@@ -134,6 +134,13 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     private LatLng rentedBikeLocation = null; // GPS location of rented bike
     private static final float PROXIMITY_THRESHOLD_METERS = 30f; // Distance to hide user marker
     private DatabaseReference bikesRef; // Reference to bikes in Firebase
+    
+    // Enhanced real-time tracking variables
+    private LatLng lastUserLocation = null; // Last known user location for interpolation
+    private LatLng lastBikeLocation = null; // Last known bike location for interpolation
+    private long lastUserLocationTime = 0; // Timestamp of last user location update
+    private long lastBikeLocationTime = 0; // Timestamp of last bike location update
+    private Handler interpolationHandler = new Handler(Looper.getMainLooper()); // Handler for smooth interpolation
 
     // Firebase references - Realtime Database for GPS data, Firestore for user profiles
     private DatabaseReference rideLogsRef; // For GPS data in Realtime Database
@@ -751,12 +758,25 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     }
 
     private void animateMarker(final Marker marker, final LatLng toPosition) {
-        final Handler handler = new Handler();
-        final long start = SystemClock.uptimeMillis();
-        final long duration = 1000; // Animation duration in ms
-        final Interpolator interpolator = new LinearInterpolator();
-
+        if (marker == null) return;
+        
         final LatLng startLatLng = marker.getPosition();
+        
+        // Calculate distance to determine animation duration
+        float[] results = new float[1];
+        Location.distanceBetween(
+                startLatLng.latitude, startLatLng.longitude,
+                toPosition.latitude, toPosition.longitude,
+                results
+        );
+        float distance = results[0];
+        
+        // Dynamic animation duration based on distance (smoother for short distances)
+        long duration = Math.max(300, Math.min(1500, (long)(distance * 10))); // 300ms to 1500ms
+        
+        final Handler handler = new Handler(Looper.getMainLooper());
+        final long start = SystemClock.uptimeMillis();
+        final Interpolator interpolator = new LinearInterpolator();
 
         handler.post(new Runnable() {
             @Override
@@ -769,10 +789,143 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 marker.setPosition(new LatLng(lat, lng));
 
                 if (t < 1.0) {
-                    handler.postDelayed(this, 16); // 60fps
+                    handler.postDelayed(this, 16); // 60fps for ultra-smooth animation
                 }
             }
         });
+    }
+
+    /**
+     * Ultra-smooth marker interpolation for real-time tracking
+     * This method provides continuous smooth movement between location updates
+     */
+    private void interpolateMarkerSmoothly(final Marker marker, final LatLng targetPosition, final boolean isUserMarker) {
+        if (marker == null) return;
+        
+        final LatLng startPosition = marker.getPosition();
+        final long startTime = System.currentTimeMillis();
+        final long duration = 1000; // 1 second interpolation
+        
+        interpolationHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                long elapsed = System.currentTimeMillis() - startTime;
+                float progress = Math.min(1.0f, (float) elapsed / duration);
+                
+                // Use ease-out interpolation for smoother movement
+                float easedProgress = 1.0f - (1.0f - progress) * (1.0f - progress);
+                
+                double lat = startPosition.latitude + (targetPosition.latitude - startPosition.latitude) * easedProgress;
+                double lng = startPosition.longitude + (targetPosition.longitude - startPosition.longitude) * easedProgress;
+                
+                marker.setPosition(new LatLng(lat, lng));
+                
+                if (progress < 1.0f) {
+                    interpolationHandler.postDelayed(this, 16); // 60fps
+                } else {
+                    // Update tracking variables when interpolation completes
+                    if (isUserMarker) {
+                        lastUserLocation = targetPosition;
+                        lastUserLocationTime = System.currentTimeMillis();
+                    } else {
+                        lastBikeLocation = targetPosition;
+                        lastBikeLocationTime = System.currentTimeMillis();
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Enhanced marker animation with interpolation for ultra-smooth movement
+     */
+    private void animateMarkerWithInterpolation(final Marker marker, final LatLng toPosition, final boolean isUserMarker) {
+        if (marker == null) return;
+        
+        final LatLng startLatLng = marker.getPosition();
+        
+        // Calculate distance to determine animation duration
+        float[] results = new float[1];
+        Location.distanceBetween(
+                startLatLng.latitude, startLatLng.longitude,
+                toPosition.latitude, toPosition.longitude,
+                results
+        );
+        float distance = results[0];
+        
+        // Dynamic animation duration based on distance (smoother for short distances)
+        long duration = Math.max(200, Math.min(1200, (long)(distance * 8))); // 200ms to 1200ms
+        
+        final Handler handler = new Handler(Looper.getMainLooper());
+        final long start = SystemClock.uptimeMillis();
+        
+        // Use ease-in-out interpolator for more natural movement
+        final Interpolator interpolator = new LinearInterpolator();
+
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                long elapsed = SystemClock.uptimeMillis() - start;
+                float t = interpolator.getInterpolation((float) elapsed / duration);
+
+                double lat = t * toPosition.latitude + (1 - t) * startLatLng.latitude;
+                double lng = t * toPosition.longitude + (1 - t) * startLatLng.longitude;
+                marker.setPosition(new LatLng(lat, lng));
+
+                if (t < 1.0f) {
+                    handler.postDelayed(this, 16); // 60fps for ultra-smooth animation
+                } else {
+                    // Start continuous interpolation for smooth real-time tracking
+                    interpolateMarkerSmoothly(marker, toPosition, isUserMarker);
+                }
+            }
+        });
+    }
+
+    /**
+     * Anti-stuck mechanism to ensure markers never freeze in place
+     * This method provides fallback updates if markers haven't moved in a while
+     */
+    private void startAntiStuckMonitoring() {
+        Handler antiStuckHandler = new Handler(Looper.getMainLooper());
+        
+        antiStuckHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                long currentTime = System.currentTimeMillis();
+                
+                // Check if user marker is stuck (no update for 5 seconds)
+                if (userMarker != null && currentLocation != null && 
+                    (currentTime - lastUserLocationTime) > 5000) {
+                    Log.d("AntiStuck", "User marker appears stuck, forcing update");
+                    animateMarkerWithInterpolation(userMarker, currentLocation, true);
+                }
+                
+                // Check if bike marker is stuck (no update for 10 seconds)
+                if (bikeMarker != null && rentedBikeLocation != null && 
+                    (currentTime - lastBikeLocationTime) > 10000) {
+                    Log.d("AntiStuck", "Bike marker appears stuck, forcing update");
+                    animateMarkerWithInterpolation(bikeMarker, rentedBikeLocation, false);
+                }
+                
+                // Schedule next check in 3 seconds
+                antiStuckHandler.postDelayed(this, 3000);
+            }
+        });
+    }
+
+    /**
+     * Enhanced marker creation with anti-stuck initialization
+     */
+    private void createUserMarkerWithAntiStuck() {
+        if (currentLocation == null) return;
+        
+        createUserMarker();
+        lastUserLocation = currentLocation;
+        lastUserLocationTime = System.currentTimeMillis();
+        
+        // Start anti-stuck monitoring if not already started
+        startAntiStuckMonitoring();
     }
 
 
@@ -995,9 +1148,10 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     @SuppressWarnings("deprecation")
     private void startLocationUpdates() {
         locationRequest = LocationRequest.create()
-                .setInterval(2000)  // Update every 2 seconds
-                .setFastestInterval(1000)
-                .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+                .setInterval(1000)  // Update every 1 second for smoother tracking
+                .setFastestInterval(500)  // Fastest update every 0.5 seconds
+                .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
+                .setSmallestDisplacement(1.0f); // Update if moved at least 1 meter
 
         locationCallback = new LocationCallback() {
             @Override
@@ -1005,19 +1159,40 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 if (locationResult == null) return;
 
                 Location loc = locationResult.getLastLocation();
+                if (loc == null) return;
+                
+                // Filter out inaccurate locations to prevent marker jumping
+                if (loc.getAccuracy() > 50.0f) { // Only accept locations with accuracy better than 50 meters
+                    Log.d("MainPage", "Location accuracy too low: " + loc.getAccuracy() + "m, skipping update");
+                    return;
+                }
+                
                 LatLng currentLatLng = new LatLng(loc.getLatitude(), loc.getLongitude());
+                
+                // Check if location has changed significantly to avoid unnecessary updates
+                if (currentLocation != null) {
+                    float[] results = new float[1];
+                    Location.distanceBetween(
+                            currentLocation.latitude, currentLocation.longitude,
+                            currentLatLng.latitude, currentLatLng.longitude,
+                            results
+                    );
+                    if (results[0] < 2.0f) { // Only update if moved more than 2 meters
+                        return;
+                    }
+                }
 
                 // Update current location
                 currentLocation = currentLatLng;
 
-                // Always update user marker position
+                // Always update user marker position with enhanced smooth animation
                 if (userMarker != null) {
-                    animateMarker(userMarker, currentLatLng);
+                    animateMarkerWithInterpolation(userMarker, currentLatLng, true);
                 } else {
-                    createUserMarker();
+                    createUserMarkerWithAntiStuck();
                 }
                 
-                Log.d("MainPage", "Location updated: " + currentLatLng + ", userMarker exists: " + (userMarker != null));
+                Log.d("MainPage", "Location updated: " + currentLatLng + " (accuracy: " + loc.getAccuracy() + "m), userMarker exists: " + (userMarker != null));
 
                 // Update marker visibility based on proximity to rented bike
                 if (transactionAuthorized && rentedBikeId != null) {
@@ -1873,7 +2048,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     }
     
     /**
-     * Listen to rented bike's GPS location from Firebase
+     * Listen to rented bike's GPS location from Firebase with enhanced real-time tracking
      * @param bikeId The rented bike's ID
      */
     private void listenToRentedBikeGPS(String bikeId) {
@@ -1890,14 +2065,30 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 // Parse latitude and longitude as strings
                 String latStr = snapshot.child("latitude").getValue(String.class);
                 String lngStr = snapshot.child("longitude").getValue(String.class);
+                String timestampStr = snapshot.child("timestamp").getValue(String.class);
                 
                 if (latStr != null && lngStr != null) {
                     try {
                         double lat = Double.parseDouble(latStr);
                         double lng = Double.parseDouble(lngStr);
-                        rentedBikeLocation = new LatLng(lat, lng);
+                        LatLng newBikeLocation = new LatLng(lat, lng);
                         
-                        // Update or create bike marker
+                        // Check if bike location has changed significantly to prevent unnecessary updates
+                        if (rentedBikeLocation != null) {
+                            float[] results = new float[1];
+                            Location.distanceBetween(
+                                    rentedBikeLocation.latitude, rentedBikeLocation.longitude,
+                                    newBikeLocation.latitude, newBikeLocation.longitude,
+                                    results
+                            );
+                            if (results[0] < 1.0f) { // Only update if moved more than 1 meter
+                                return;
+                            }
+                        }
+                        
+                        rentedBikeLocation = newBikeLocation;
+                        
+                        // Update or create bike marker with enhanced smooth animation
                         if (bikeMarker == null) {
                             MarkerOptions markerOptions = new MarkerOptions()
                                     .position(rentedBikeLocation)
@@ -1906,13 +2097,14 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                                     .anchor(0.5f, 1.0f);
                             bikeMarker = mMap.addMarker(markerOptions);
                         } else {
-                            animateMarker(bikeMarker, rentedBikeLocation);
+                            animateMarkerWithInterpolation(bikeMarker, rentedBikeLocation, false);
                         }
                         
                         // Update marker visibility based on distance
                         updateMarkerVisibility();
                         
-                        Log.d("BikeRental", "Rented bike location updated: " + rentedBikeLocation);
+                        Log.d("BikeRental", "Rented bike location updated: " + rentedBikeLocation + 
+                              (timestampStr != null ? " (timestamp: " + timestampStr + ")" : ""));
                     } catch (NumberFormatException e) {
                         Log.e("BikeRental", "Failed to parse bike coordinates", e);
                     }
@@ -1960,10 +2152,10 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             // User is far from bike, show both markers
             if (userMarker == null) {
                 // Create user marker if it doesn't exist
-                createUserMarker();
+                createUserMarkerWithAntiStuck();
             } else {
                 userMarker.setVisible(true);
-                animateMarker(userMarker, currentLocation);
+                animateMarkerWithInterpolation(userMarker, currentLocation, true);
             }
             
             if (bikeMarker != null) {
