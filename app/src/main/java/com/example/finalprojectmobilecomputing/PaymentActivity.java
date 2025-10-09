@@ -48,6 +48,8 @@ public class PaymentActivity extends AppCompatActivity {
         // Get QR code and userId passed from QRScannerActivity
         String qrCode = getIntent().getStringExtra("qr_code");
         String userId = getIntent().getStringExtra("user_id");
+        String rideTime = AppData.getInstance().getRideTime();
+        String amount = AppData.getInstance().getAmount();
 
         if (qrCode == null || userId == null) {
             Log.e("PAYMENT", "Missing qrCode or userId");
@@ -55,7 +57,7 @@ public class PaymentActivity extends AppCompatActivity {
             return;
         }
 
-        // Derive bikeId from qrCode (e.g. bike_001_qr → bike_001)
+        // Derive bikeId from qrCode (e.g. bike_001_qr → bike_00    1)
         String bikeId = qrCode.split("_qr")[0];
 
         // Build logging client
@@ -102,9 +104,26 @@ public class PaymentActivity extends AppCompatActivity {
 
                     PayMongoApi api = retrofit.create(PayMongoApi.class);
 
+                    // Determine payment amount based on ride time
+                    int amountCentavos;
+                    switch (rideTime) {
+                        case "30 minutes":
+                            amountCentavos = 2500; // ₱25.00
+                            break;
+                        case "45 minutes":
+                            amountCentavos = 3500; // ₱35.00
+                            break;
+                        case "1 hour":
+                            amountCentavos = 4000; // ₱40.00
+                            break;
+                        default:
+                            amountCentavos = 1000; // fallback ₱10
+                            break;
+                    }
+
                     // Create source body for GCash payment
                     Map<String, Object> attributes = new HashMap<>();
-                    attributes.put("amount", 10000); // ₱100.00 in centavos
+                    attributes.put("amount", amountCentavos); // ₱100.00 in centavos
                     attributes.put("type", "gcash");
                     attributes.put("currency", "PHP");
 
@@ -115,6 +134,8 @@ public class PaymentActivity extends AppCompatActivity {
                                     "?bikeId=" + bikeId +
                                     "&qrCode=" + qrCode +
                                     "&userId=" + userId +
+                                    "&rideTime=" + rideTime +
+                                    "&amount=" + amount +
                                     "&token=" + token);
                     redirect.put("failed", "https://sikad-server.onrender.com/failed");
                     attributes.put("redirect", redirect);

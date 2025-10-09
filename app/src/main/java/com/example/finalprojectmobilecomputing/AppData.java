@@ -9,6 +9,7 @@ public class AppData {
     private String userName;
     private String rideTime;  // NEW field
     private String bikeId;  // Bike ID from QR code
+    private String amount;
 
     private AppData() { }
 
@@ -43,6 +44,9 @@ public class AppData {
         this.rideTime = rideTime;
     }
 
+    public String getAmount() { return amount; }
+    public void setAmount(String amount) { this.amount = amount; }
+
     public String getUserName() {
         return userName;
     }
@@ -65,5 +69,6 @@ public class AppData {
         userName = null;
         rideTime = null;
         bikeId = null;
+        amount = null;
     }
 }

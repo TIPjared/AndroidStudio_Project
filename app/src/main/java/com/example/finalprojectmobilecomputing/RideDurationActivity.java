@@ -50,15 +50,15 @@ public class RideDurationActivity extends AppCompatActivity {
         });
 
         // Duration selection buttons
-        btn30Minutes.setOnClickListener(v -> selectDuration("30 minutes"));
-        btn45Minutes.setOnClickListener(v -> selectDuration("45 minutes"));
-        btn1Hour.setOnClickListener(v -> selectDuration("1 hour"));
+        btn30Minutes.setOnClickListener(v -> selectDuration("30 minutes", "25.00"));
+        btn45Minutes.setOnClickListener(v -> selectDuration("45 minutes", "35.00"));
+        btn1Hour.setOnClickListener(v -> selectDuration("1 hour", "40.00"));
     }
 
-    private void selectDuration(String duration) {
+    private void selectDuration(String duration, String amount) {
         // Save to AppData
         AppData.getInstance().setRideTime(duration);
-
+        AppData.getInstance().setAmount(amount);
         // Navigate to Ride Details
         Intent intent = new Intent(RideDurationActivity.this, RideDetailsActivity.class);
         startActivity(intent);
