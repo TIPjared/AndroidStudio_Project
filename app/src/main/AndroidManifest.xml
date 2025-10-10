@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     package="com.example.finalprojectmobilecomputing">
+
     <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -10,7 +11,7 @@
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.VIBRATE"/>
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Camera -->
@@ -20,7 +21,7 @@
         android:maxSdkVersion="32" />
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" /> <!-- For Android 13+ (API level 33+) -->
+        android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 
     <uses-feature android:name="android.hardware.camera" />
@@ -31,7 +32,6 @@
     <uses-feature
         android:name="android.hardware.telephony"
         android:required="false" />
-
 
     <application
         android:allowBackup="true"
@@ -44,152 +44,189 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.FinalProjectMobileComputing"
         tools:targetApi="31">
-        <receiver android:exported="true" android:name=".GeofenceBroadcastReceiver"/>
-        <activity
-            android:name=".QRScannerActivity"
-            android:exported="false" /> <!-- Google Maps API key -->
+
+        <receiver
+            android:name=".GeofenceBroadcastReceiver"
+            android:exported="true" />
+
+        <!-- Google Maps API Key -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="@string/google_maps_key" /> <!-- App activities -->
+            android:value="@string/google_maps_key" />
+
+        <!-- App Activities -->
+        <activity
+            android:name=".QRScannerActivity"
+            android:exported="false" />
+
         <activity
             android:name=".SplashActivity"
             android:exported="true"
             android:theme="@style/Theme.FinalProjectMobileComputing.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
         <activity
             android:name=".MainActivity"
             android:exported="false" />
+
         <activity
             android:name=".MainPage"
             android:exported="true"
             android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
-
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-
                 <data
                     android:host="main"
                     android:scheme="myapp" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
-
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-
                 <data
                     android:host="sikad-static.onrender.com"
                     android:scheme="https" />
             </intent-filter>
         </activity>
+
         <activity
             android:name=".PaymentResponseActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
-
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-
                 <data
                     android:host="payment"
                     android:scheme="myapp" />
             </intent-filter>
         </activity>
+
         <activity
             android:name=".SignUpActivity"
             android:exported="false" />
+
         <activity
             android:name=".Profile"
             android:exported="false"
             android:label="@string/profile_title"
             android:parentActivityName=".MainPage" />
+
         <activity
             android:name=".PaymentActivity"
             android:exported="false" />
+
         <activity
             android:name=".RideDurationActivity"
             android:exported="false"
             android:label="Select Ride Duration"
             android:parentActivityName=".MainPage" />
+
         <activity
             android:name=".LandingPage"
             android:exported="false" />
+
         <activity
             android:name=".OTPVerification"
             android:exported="false" />
+
         <activity
             android:name=".HistoryActivity"
             android:exported="false"
             android:label="@string/ride_history"
             android:parentActivityName=".MainPage" />
+
         <activity
             android:name=".RideHistoryActivity"
             android:exported="false"
             android:label="@string/ride_history"
             android:parentActivityName=".MainPage" />
+
+        <!-- ✅ NEW: Log History Activity -->
+        <activity
+            android:name=".LogHistoryActivity"
+            android:exported="false"
+            android:label="Ride Logs"
+            android:parentActivityName=".MainPage" />
+
         <activity
             android:name=".SupportFeedbackActivity"
             android:exported="false"
             android:label="@string/support_feedback_title"
             android:parentActivityName=".MainPage" />
+
         <activity
             android:name=".ChangePasswordActivity"
             android:exported="false"
             android:label="Change Password"
             android:parentActivityName=".Profile" />
+
         <activity
             android:name=".PrivacySettingsActivity"
             android:exported="false"
             android:label="Privacy Settings"
             android:parentActivityName=".Profile" />
+
         <activity
             android:name=".ForgotPasswordActivity"
             android:exported="false"
             android:label="Reset Password"
             android:parentActivityName=".MainActivity" />
+
         <activity
             android:name=".PrivacyPolicyActivity"
             android:exported="false"
             android:label="Privacy Policy"
             android:parentActivityName=".PrivacySettingsActivity" />
+
         <activity
             android:name=".TermsOfServiceActivity"
             android:exported="false"
             android:label="Terms of Service"
             android:parentActivityName=".PrivacySettingsActivity" />
+
         <activity
             android:name=".EditProfileActivity"
             android:exported="false"
             android:label="Edit Profile"
             android:parentActivityName=".Profile" />
+
         <activity
             android:name=".FAQActivity"
             android:exported="false"
             android:label="FAQ"
             android:parentActivityName=".SupportFeedbackActivity" />
+
         <activity
             android:name=".HelpCenterActivity"
             android:exported="false"
             android:label="Help Center"
             android:parentActivityName=".SupportFeedbackActivity" />
+
         <activity
             android:name=".ContactSupportActivity"
             android:exported="false"
             android:label="Contact Support"
             android:parentActivityName=".SupportFeedbackActivity" />
+
         <activity
             android:name=".RideDetailsActivity"
             android:exported="false"
             android:label="Ride Details"
             android:parentActivityName=".RideDurationActivity" />
+
+        <activity
+            android:name=".HistoryDetailsActivity"
+            android:exported="false"
+            android:label="Ride Details"
+            android:parentActivityName=".LogHistoryActivity" />
+
     </application>
 
 </manifest>
