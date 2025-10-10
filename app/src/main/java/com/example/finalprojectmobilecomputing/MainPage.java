@@ -235,7 +235,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         navigationView.setNavigationItemSelectedListener(item -> {
             Intent intent;
             if (item.getItemId() == R.id.nav_history) {
-                startActivity(new Intent(MainPage.this, RideHistoryActivity.class));
+                startActivity(new Intent(MainPage.this, LogHistoryActivity.class));
             } else if (item.getItemId() == R.id.nav_support) {
                 startActivity(new Intent(MainPage.this, SupportFeedbackActivity.class));
             }
