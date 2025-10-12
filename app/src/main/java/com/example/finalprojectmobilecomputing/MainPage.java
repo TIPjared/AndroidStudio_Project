@@ -2,7 +2,10 @@ package com.example.finalprojectmobilecomputing;
 
 import android.Manifest;
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -127,6 +130,8 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     private Map<String, LatLng> predefinedLocations = new HashMap<>();
 
     private boolean transactionAuthorized = false;
+    private RideStateManager rideStateManager;
+    private BroadcastReceiver rideUpdateReceiver;
     
     // Bike rental GPS logic variables
     private Map<String, Marker> allBikeMarkers = new HashMap<>(); // All bike markers on map
@@ -175,6 +180,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         // --- Initialize services & views ---
         fusedLocationClient     = LocationServices.getFusedLocationProviderClient(this);
         geofencingClient        = LocationServices.getGeofencingClient(this);
+        rideStateManager        = RideStateManager.getInstance(this);
 
         drawerLayout            = findViewById(R.id.drawerLayout);
         menuButton              = findViewById(R.id.menuButton);
@@ -407,6 +413,167 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         if (mapFragment != null) {
             mapFragment.getMapAsync(this);
         }
+        
+        // --- Setup broadcast receiver for ride updates from service ---
+        setupRideUpdateReceiver();
+        
+        // --- Restore ride state if there's an active ride ---
+        restoreRideState();
+    }
+    
+    /**
+     * Setup broadcast receiver to receive updates from RideTimerService
+     */
+    private void setupRideUpdateReceiver() {
+        rideUpdateReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (RideTimerService.ACTION_UPDATE_UI.equals(intent.getAction())) {
+                    long elapsedMillis = intent.getLongExtra("elapsed_millis", 0);
+                    float distanceTraveled = intent.getFloatExtra("total_distance", 0f);
+                    
+                    // Update UI with elapsed time
+                    int seconds = (int) (elapsedMillis / 1000);
+                    int minutes = seconds / 60;
+                    seconds = seconds % 60;
+                    String timeStr = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds);
+                    
+                    if (elapsedTimeTextView != null) {
+                        elapsedTimeTextView.setText("Elapsed: " + timeStr);
+                    }
+                    
+                    // Update distance UI
+                    float distanceKm = distanceTraveled / 1000f;
+                    if (distanceTextView != null) {
+                        distanceTextView.setText(String.format(Locale.getDefault(), "%.2f km", distanceKm));
+                    }
+                    
+                    totalDistance = distanceTraveled;
+                }
+            }
+        };
+        
+        IntentFilter filter = new IntentFilter(RideTimerService.ACTION_UPDATE_UI);
+        registerReceiver(rideUpdateReceiver, filter);
+        Log.d("MainPage", "Broadcast receiver registered for ride updates");
+    }
+    
+    /**
+     * Restore ride state from SharedPreferences if there's an active ride
+     */
+    private void restoreRideState() {
+        if (rideStateManager.isRideActive()) {
+            Log.d("MainPage", "Restoring active ride state");
+            
+            RideStateManager.RideState state = rideStateManager.getRideState();
+            if (state != null) {
+                // Restore ride variables
+                transactionAuthorized = true;
+                rideStartTime = state.rideStartTime;
+                startTime = state.rideStartTime;
+                totalDistance = state.totalDistance;
+                rentedBikeId = state.bikeId;
+                
+                // Restore AppData
+                AppData.getInstance().setBikeId(state.bikeId);
+                AppData.getInstance().setQrCode(state.qrCode);
+                AppData.getInstance().setUserId(state.userId);
+                AppData.getInstance().setRideTime(state.rideTime);
+                AppData.getInstance().setAmount(state.amount);
+                
+                // Update UI to show ride is active
+                locationCard.setVisibility(View.VISIBLE);
+                stopButton.setVisibility(View.VISIBLE);
+                payButton.setVisibility(View.GONE);
+                timerTextView.setVisibility(View.VISIBLE);
+                distanceTextView.setVisibility(View.VISIBLE);
+                elapsedTimeTextView.setVisibility(View.VISIBLE);
+                
+                // Display current elapsed time
+                long elapsed = System.currentTimeMillis() - state.rideStartTime;
+                int seconds = (int) (elapsed / 1000);
+                int minutes = seconds / 60;
+                seconds = seconds % 60;
+                String timeStr = String.format(Locale.getDefault(), "Elapsed: %02d:%02d", minutes, seconds);
+                elapsedTimeTextView.setText(timeStr);
+                
+                // Display current distance
+                float distanceKm = state.totalDistance / 1000f;
+                distanceTextView.setText(String.format(Locale.getDefault(), "%.2f km", distanceKm));
+                
+                // Start the bike rental display
+                if (state.bikeId != null && !state.bikeId.isEmpty()) {
+                    startRental(state.bikeId);
+                }
+                
+                // Ensure foreground service is running
+                ensureServiceRunning();
+                
+                Log.d("MainPage", "Ride state restored successfully");
+                Toast.makeText(this, "Continuing your active ride", Toast.LENGTH_SHORT).show();
+            }
+        } else {
+            Log.d("MainPage", "No active ride to restore");
+        }
+    }
+    
+    /**
+     * Ensure RideTimerService is running for the active ride
+     */
+    private void ensureServiceRunning() {
+        Intent serviceIntent = new Intent(this, RideTimerService.class);
+        serviceIntent.setAction(RideTimerService.ACTION_START_RIDE);
+        
+        RideStateManager.RideState state = rideStateManager.getRideState();
+        if (state != null) {
+            serviceIntent.putExtra(RideTimerService.EXTRA_BIKE_ID, state.bikeId);
+            serviceIntent.putExtra(RideTimerService.EXTRA_QR_CODE, state.qrCode);
+            serviceIntent.putExtra(RideTimerService.EXTRA_USER_ID, state.userId);
+            serviceIntent.putExtra(RideTimerService.EXTRA_RIDE_TIME, state.rideTime);
+            serviceIntent.putExtra(RideTimerService.EXTRA_AMOUNT, state.amount);
+            serviceIntent.putExtra(RideTimerService.EXTRA_START_TIME, state.rideStartTime);
+        }
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent);
+        } else {
+            startService(serviceIntent);
+        }
+        
+        Log.d("MainPage", "Foreground service started/ensured");
+    }
+    
+    /**
+     * Start the foreground service for a new ride
+     */
+    private void startRideService() {
+        String bikeId = AppData.getInstance().getBikeId();
+        String qrCode = AppData.getInstance().getQrCode();
+        String userId = AppData.getInstance().getUserId();
+        String rideTime = AppData.getInstance().getRideTime();
+        String amount = AppData.getInstance().getAmount();
+        
+        if (bikeId == null || userId == null) {
+            Log.w("MainPage", "Cannot start service: missing bike ID or user ID");
+            return;
+        }
+        
+        Intent serviceIntent = new Intent(this, RideTimerService.class);
+        serviceIntent.setAction(RideTimerService.ACTION_START_RIDE);
+        serviceIntent.putExtra(RideTimerService.EXTRA_BIKE_ID, bikeId);
+        serviceIntent.putExtra(RideTimerService.EXTRA_QR_CODE, qrCode);
+        serviceIntent.putExtra(RideTimerService.EXTRA_USER_ID, userId);
+        serviceIntent.putExtra(RideTimerService.EXTRA_RIDE_TIME, rideTime);
+        serviceIntent.putExtra(RideTimerService.EXTRA_AMOUNT, amount);
+        serviceIntent.putExtra(RideTimerService.EXTRA_START_TIME, System.currentTimeMillis());
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent);
+        } else {
+            startService(serviceIntent);
+        }
+        
+        Log.d("MainPage", "Ride foreground service started");
     }
 
 
@@ -415,6 +582,15 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         if (timerHandler != null && timerRunnable != null) timerHandler.removeCallbacks(timerRunnable);
 
         transactionAuthorized = false;
+        
+        // Stop the foreground service
+        Intent serviceIntent = new Intent(this, RideTimerService.class);
+        serviceIntent.setAction(RideTimerService.ACTION_STOP_RIDE);
+        startService(serviceIntent);
+        Log.d("MainPage", "Foreground service stop requested");
+        
+        // Clear ride state from SharedPreferences
+        rideStateManager.clearRideState();
         
         // End the rental and show all bikes again
         endRental();
@@ -569,6 +745,9 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             startRideTimer();
             startLocationUpdates();
             startTimer();
+            
+            // Start foreground service for ride tracking
+            startRideService();
             } else {
             // Show Pay Now button
                 payButton.setText("Pay Now");
@@ -1818,6 +1997,17 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        
+        // Unregister broadcast receiver
+        if (rideUpdateReceiver != null) {
+            try {
+                unregisterReceiver(rideUpdateReceiver);
+                Log.d("MainPage", "Broadcast receiver unregistered");
+            } catch (IllegalArgumentException e) {
+                Log.w("MainPage", "Receiver already unregistered");
+            }
+        }
+        
         if (bikeListener != null && bikeStatusRef != null) {
             bikeStatusRef.removeEventListener(bikeListener);
             bikeListener = null;

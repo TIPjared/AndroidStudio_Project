@@ -10,11 +10,16 @@ import androidx.core.view.WindowInsetsCompat;
 import android.content.Intent;
 import android.os.Handler;
 import android.view.View;
+import android.util.Log;
+
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 
 
 public class SplashActivity extends AppCompatActivity {
 
     private static final int SPLASH_TIME_OUT = 2000; // 2 seconds
+    private static final String TAG = "SplashActivity";
 
     @Override
 
@@ -31,7 +36,21 @@ public class SplashActivity extends AppCompatActivity {
         });
 
         new Handler().postDelayed(() -> {
-            Intent intent = new Intent(SplashActivity.this, LandingPage.class);
+            // Check if user is already logged in
+            FirebaseAuth auth = FirebaseAuth.getInstance();
+            FirebaseUser currentUser = auth.getCurrentUser();
+            
+            Intent intent;
+            if (currentUser != null) {
+                // User is logged in, go directly to MainPage
+                Log.d(TAG, "User already logged in: " + currentUser.getEmail());
+                intent = new Intent(SplashActivity.this, MainPage.class);
+            } else {
+                // User not logged in, go to landing page
+                Log.d(TAG, "No user logged in, going to landing page");
+                intent = new Intent(SplashActivity.this, LandingPage.class);
+            }
+            
             startActivity(intent);
             finish();
         }, SPLASH_TIME_OUT);
