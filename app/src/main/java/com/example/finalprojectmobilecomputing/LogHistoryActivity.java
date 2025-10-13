@@ -99,6 +99,7 @@ public class LogHistoryActivity extends AppCompatActivity {
 
         db.collection("ride_logs")
                 .whereEqualTo("userId", currentUser.getUid())
+                .whereEqualTo("isDeleted", false) // 🔹 filter out deleted rides
                 .orderBy("endTime", Query.Direction.DESCENDING)
                 .get()
                 .addOnSuccessListener(querySnapshot -> {

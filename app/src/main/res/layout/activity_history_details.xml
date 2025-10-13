@@ -24,6 +24,19 @@
                 android:layout_height="match_parent"
                 android:gravity="center_vertical">
 
+                <!-- Burger Icon -->
+                <ImageButton
+                    android:id="@+id/menuButton"
+                    android:layout_width="60dp"
+                    android:layout_height="60dp"
+                    android:layout_alignParentEnd="true"
+                    android:layout_centerVertical="true"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/baseline_arrow_drop_down_24"
+                    android:tint="#FFFFFF"
+                    android:contentDescription="Menu"/>
+
+                <!-- Back Button -->
                 <ImageButton
                     android:id="@+id/backButton"
                     android:layout_width="48dp"
@@ -34,6 +47,7 @@
                     android:tint="#FFFFFF"
                     android:contentDescription="Back"/>
 
+                <!-- Title -->
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -55,7 +69,7 @@
         android:layout_height="match_parent"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-        <!-- Fixed Map Section (Top 65%) -->
+        <!-- Fixed Map Section (Top 25%) -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"

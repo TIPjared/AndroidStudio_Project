@@ -436,33 +436,41 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 if (RideTimerService.ACTION_UPDATE_UI.equals(intent.getAction())) {
                     long elapsedMillis = intent.getLongExtra("elapsed_millis", 0);
                     float distanceTraveled = intent.getFloatExtra("total_distance", 0f);
-                    
+
                     // Update UI with elapsed time
                     int seconds = (int) (elapsedMillis / 1000);
                     int minutes = seconds / 60;
                     seconds = seconds % 60;
                     String timeStr = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds);
-                    
+
                     if (elapsedTimeTextView != null) {
                         elapsedTimeTextView.setText("Elapsed: " + timeStr);
                     }
-                    
+
                     // Update distance UI
                     float distanceKm = distanceTraveled / 1000f;
                     if (distanceTextView != null) {
                         distanceTextView.setText(String.format(Locale.getDefault(), "%.2f km", distanceKm));
                     }
-                    
+
                     totalDistance = distanceTraveled;
                 }
             }
         };
-        
+
         IntentFilter filter = new IntentFilter(RideTimerService.ACTION_UPDATE_UI);
-        registerReceiver(rideUpdateReceiver, filter);
+
+        // ✅ FIX: Add proper receiver flag for Android 12+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(rideUpdateReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(rideUpdateReceiver, filter);
+        }
+
         Log.d("MainPage", "Broadcast receiver registered for ride updates");
     }
-    
+
+
     /**
      * Restore ride state from SharedPreferences if there's an active ride
      */

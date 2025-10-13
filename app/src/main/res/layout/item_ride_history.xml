@@ -30,6 +30,7 @@
                 android:textSize="14sp"
                 android:textStyle="bold" />
 
+            <!-- Ride status -->
             <TextView
                 android:id="@+id/statusText"
                 android:layout_width="wrap_content"
@@ -166,7 +167,7 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- Action buttons -->
+        <!-- View details button -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -179,14 +180,29 @@
                 android:id="@+id/viewDetailsButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:drawableStart="@drawable/baseline_visibility_24"
-                android:drawablePadding="2dp"
+
+                android:drawablePadding="1dp"
                 android:gravity="center"
                 android:padding="12dp"
                 android:text="VIEW DETAILS"
                 android:textColor="#4CAF50"
                 android:textSize="14sp"
-                android:textStyle="bold" />
+                android:textStyle="bold"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true" />
         </LinearLayout>
+
+        <!-- Delete button -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp"
+            android:paddingBottom="12dp">
+
+        </LinearLayout>
+
     </LinearLayout>
-</androidx.cardview.widget.CardView> 
+</androidx.cardview.widget.CardView>
