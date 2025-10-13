@@ -128,6 +128,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     private Button stopButton;
     private GeofencingClient geofencingClient;
     private Map<String, LatLng> predefinedLocations = new HashMap<>();
+    private List<LatLng> activeGeofencePoints = new ArrayList<>();
 
     private boolean transactionAuthorized = false;
     
@@ -292,7 +293,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             if ("Stop Ride".equals(payButton.getText().toString())) {
                 stopRide();
             } else {
-                if (currentLocation != null && antelBoundary != null && !antelBoundary.isEmpty()) {
+                if (currentLocation != null && activeGeofencePoints != null && !activeGeofencePoints.isEmpty()) {
 
                     // ===== Temporarily disabled geofence check =====
             /*
@@ -1013,23 +1014,23 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                         List<Map<String, Object>> points = (List<Map<String, Object>>) document.get("points");
 
                         if (points != null && !points.isEmpty()) {
-                            List<LatLng> geofencePoints = new ArrayList<>();
+                            activeGeofencePoints.clear();
                             for (Map<String, Object> point : points) {
                                 GeoPoint geoPoint = (GeoPoint) point.get("location");
                                 if (geoPoint != null) {
                                     LatLng latLng = new LatLng(geoPoint.getLatitude(), geoPoint.getLongitude());
-                                    geofencePoints.add(latLng);
+                                    activeGeofencePoints.add(latLng);
                                 }
                             }
 
                             // Draw the geofence area on the map
                             mMap.addPolygon(new PolygonOptions()
-                                    .addAll(geofencePoints)
+                                    .addAll(activeGeofencePoints)
                                     .strokeColor(Color.parseColor(colorCode))
                                     .fillColor(ColorUtils.setAlphaComponent(Color.parseColor(colorCode), 80)));
 
                             // Add geofences dynamically
-                            for (LatLng latLng : geofencePoints) {
+                            for (LatLng latLng : activeGeofencePoints) {
                                 addGeofence(latLng.latitude, latLng.longitude);
                             }
 
