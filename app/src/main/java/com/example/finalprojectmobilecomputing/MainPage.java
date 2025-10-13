@@ -38,6 +38,8 @@ import android.content.res.ColorStateList;
 import android.util.TypedValue;
 import com.google.android.material.button.MaterialButton;
 
+import com.google.firebase.firestore.CollectionReference;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
 import com.google.gson.Gson;
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -71,6 +73,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.ColorUtils;
 import androidx.drawerlayout.widget.DrawerLayout;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
@@ -303,6 +306,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 Toast.makeText(this, "You must be inside Antel Grand Village to start a ride.", Toast.LENGTH_SHORT).show();
             }
             */
+
 
                     // Navigate to ride duration selection page
                     Intent intent = new Intent(MainPage.this, RideDurationActivity.class);
@@ -976,8 +980,8 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         mMap = googleMap;
         requestLocationPermission();
 
-        // Draw Antel Grand Village geofence
-        listenToGeofenceChanges();
+        // Draw Geofence
+        loadActiveGeofenceFromFirestore();
 
         // Load all available bikes on map
         loadAllBikes();
@@ -995,6 +999,88 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         }
     }
 
+    private void loadActiveGeofenceFromFirestore() {
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
+
+        db.collection("geofence")
+                .whereEqualTo("is_active", true)
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    if (!queryDocumentSnapshots.isEmpty()) {
+                        DocumentSnapshot document = queryDocumentSnapshots.getDocuments().get(0);
+                        String name = document.getString("name");
+                        String colorCode = document.getString("color_code");
+                        List<Map<String, Object>> points = (List<Map<String, Object>>) document.get("points");
+
+                        if (points != null && !points.isEmpty()) {
+                            List<LatLng> geofencePoints = new ArrayList<>();
+                            for (Map<String, Object> point : points) {
+                                GeoPoint geoPoint = (GeoPoint) point.get("location");
+                                if (geoPoint != null) {
+                                    LatLng latLng = new LatLng(geoPoint.getLatitude(), geoPoint.getLongitude());
+                                    geofencePoints.add(latLng);
+                                }
+                            }
+
+                            // Draw the geofence area on the map
+                            mMap.addPolygon(new PolygonOptions()
+                                    .addAll(geofencePoints)
+                                    .strokeColor(Color.parseColor(colorCode))
+                                    .fillColor(ColorUtils.setAlphaComponent(Color.parseColor(colorCode), 80)));
+
+                            // Add geofences dynamically
+                            for (LatLng latLng : geofencePoints) {
+                                addGeofence(latLng.latitude, latLng.longitude);
+                            }
+
+                            Log.d("Geofence", "Active geofence loaded: " + name);
+                        }
+                    } else {
+                        Log.w("Geofence", "No active geofence found in Firestore.");
+                    }
+                })
+                .addOnFailureListener(e -> Log.e("Geofence", "Error fetching geofence data", e));
+    }
+
+    private void addGeofence(double latitude, double longitude) {
+        Geofence geofence = new Geofence.Builder()
+                .setRequestId("DynamicGeofence_" + latitude + "_" + longitude)
+                .setCircularRegion(
+                        latitude,
+                        longitude,
+                        100  // radius in meters — adjust as needed
+                )
+                .setExpirationDuration(Geofence.NEVER_EXPIRE)
+                .setTransitionTypes(
+                        Geofence.GEOFENCE_TRANSITION_ENTER |
+                                Geofence.GEOFENCE_TRANSITION_EXIT
+                )
+                .build();
+
+        GeofencingRequest geofencingRequest = new GeofencingRequest.Builder()
+                .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
+                .addGeofence(geofence)
+                .build();
+
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                this,
+                0,
+                new Intent(this, GeofenceBroadcastReceiver.class),
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            Log.w("Geofence", "Permission not granted.");
+            return;
+        }
+
+        geofencingClient.addGeofences(geofencingRequest, pendingIntent)
+                .addOnSuccessListener(aVoid ->
+                        Log.d("Geofence", "Added geofence at: " + latitude + ", " + longitude))
+                .addOnFailureListener(e ->
+                        Log.e("Geofence", "Failed to add geofence", e));
+    }
     private void addPredefinedMarker(String title, LatLng coords) {
         mMap.addMarker(new MarkerOptions().position(coords).title(title));
         predefinedLocations.put(title, coords);
@@ -1019,69 +1105,6 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             lng += p.longitude;
         }
         return new LatLng(lat / points.size(), lng / points.size());
-    }
-    private void listenToGeofenceChanges() {
-        FirebaseFirestore db = FirebaseFirestore.getInstance();
-        DocumentReference docRef = db.collection("geofence").document("antel");
-
-        docRef.addSnapshotListener((snapshot, error) -> {
-            if (error != null) {
-                Log.w("Firestore", "Listen failed.", error);
-                return;
-            }
-
-            if (snapshot != null && snapshot.exists()) {
-                List<Map<String, Object>> points = (List<Map<String, Object>>) snapshot.get("points");
-                if (points != null) {
-                    antelBoundary = new ArrayList<>();
-                    for (Map<String, Object> point : points) {
-                        GeoPoint geoPoint = (GeoPoint) point.get("location");
-                        if (geoPoint != null) {
-                            antelBoundary.add(new LatLng(geoPoint.getLatitude(), geoPoint.getLongitude()));
-                        }
-                    }
-
-                    // Draw village polygon on map
-                    drawGeofencePolygon();
-
-                    // Add just ONE circular geofence that surrounds the whole village
-                    LatLng center = getPolygonCenter(antelBoundary);
-                    float radiusMeters = getMaxDistanceFromCenter(center, antelBoundary) + 50; // +50m buffer
-                    addWakeUpGeofence(center, radiusMeters);
-                }
-            } else {
-                Log.d("Firestore", "No current data in geofence document.");
-            }
-        });
-    }
-    private void drawGeofencePolygon() {
-        // Clear previous polygons if needed
-        mMap.clear();
-
-        PolygonOptions polygonOptions = new PolygonOptions()
-                .addAll(antelBoundary)
-                .strokeColor(Color.RED)
-                .fillColor(0x2200FF00)
-                .strokeWidth(5);
-
-        mMap.addPolygon(polygonOptions);
-
-        // Redraw predefined markers (if you cleared map)
-        addPredefinedMarker("Point W1", new LatLng(14.4035, 120.8928));
-        addPredefinedMarker("Point W2", new LatLng(14.4020, 120.8935));
-        addPredefinedMarker("Point W3", new LatLng(14.4015, 120.8920));
-        addPredefinedMarker("Point W4", new LatLng(14.4028, 120.8908));
-        addPredefinedMarker("Point W5", new LatLng(14.4040, 120.8918));
-
-        // Automatically zoom map to show entire geofence
-        LatLngBounds.Builder builder = new LatLngBounds.Builder();
-        for (LatLng point : antelBoundary) {
-            builder.include(point);
-        }
-        LatLngBounds bounds = builder.build();
-        int padding = 100; // offset from edges in pixels
-
-        mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, padding));
     }
 
     private void addWakeUpGeofence(LatLng center, float radiusMeters) {
