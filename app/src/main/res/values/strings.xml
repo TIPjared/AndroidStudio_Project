@@ -118,4 +118,8 @@
     <string name="password_update_failure">Failed to update password</string>
     <string name="password_mismatch">Passwords do not match</string>
     <string name="password_incorrect">Incorrect password</string>
+    <string-array name="ride_options">
+        <item>⋮</item>
+        <item>Delete</item>
+    </string-array>
 </resources>

@@ -1,14 +1,19 @@
 package com.example.finalprojectmobilecomputing;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.MotionEvent;
+import android.view.View;
 import android.widget.ImageButton;
+import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AlertDialog;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -40,6 +45,20 @@ public class HistoryDetailsActivity extends AppCompatActivity implements OnMapRe
     private TextView durationText, distanceText, amountText, statusText, methodText;
     private TextView startTimeText, endTimeText, avgSpeedText;
 
+    private String rideId;
+
+    // Animation
+    private Handler polylineHandler;
+    private Runnable polylineRunnable;
+    private List<LatLng> polylinePoints;
+    private com.google.android.gms.maps.model.Polyline animatedPolyline;
+    private Marker movingMarker;
+    private int polylineIndex = 0;
+    private boolean isAnimating = false;
+
+    // Loading overlay
+    private AlertDialog loadingDialog;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -48,6 +67,10 @@ public class HistoryDetailsActivity extends AppCompatActivity implements OnMapRe
         // Back button
         ImageButton backButton = findViewById(R.id.backButton);
         backButton.setOnClickListener(v -> onBackPressed());
+
+        // Top-right menu button
+        ImageButton menuButton = findViewById(R.id.menuButton);
+        menuButton.setOnClickListener(this::showPopupMenu);
 
         // Initialize MapView
         mapView = findViewById(R.id.mapView);
@@ -74,11 +97,14 @@ public class HistoryDetailsActivity extends AppCompatActivity implements OnMapRe
         endTimeText = findViewById(R.id.endTimeText);
         avgSpeedText = findViewById(R.id.avgSpeedText);
 
-        String rideId = getIntent().getStringExtra("RIDE_ID");
+        rideId = getIntent().getStringExtra("RIDE_ID");
         if (rideId != null) loadRideDetails(rideId);
         else Toast.makeText(this, "Ride ID not found", Toast.LENGTH_SHORT).show();
+
+        setupLoadingOverlay();
     }
 
+    // ================= Map & Ride Loading =================
     private void loadRideDetails(String rideId) {
         FirebaseFirestore.getInstance()
                 .collection("ride_logs")
@@ -97,19 +123,19 @@ public class HistoryDetailsActivity extends AppCompatActivity implements OnMapRe
         double totalDistanceKm = 0.0;
 
         if (points != null && !points.isEmpty()) {
-            List<LatLng> latLngList = new ArrayList<>();
+            polylinePoints = new ArrayList<>();
             for (Map<String, Object> point : points) {
                 double lat = Double.parseDouble(point.get("latitude").toString());
                 double lng = Double.parseDouble(point.get("longitude").toString());
-                latLngList.add(new LatLng(lat, lng));
+                polylinePoints.add(new LatLng(lat, lng));
             }
 
-            if (gMap != null && !latLngList.isEmpty()) {
+            if (gMap != null && !polylinePoints.isEmpty()) {
                 gMap.clear();
 
-                // Start marker with custom image
+                // Start marker
                 gMap.addMarker(new MarkerOptions()
-                        .position(latLngList.get(0))
+                        .position(polylinePoints.get(0))
                         .title("Start")
                         .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN))
                 );
@@ -121,32 +147,30 @@ public class HistoryDetailsActivity extends AppCompatActivity implements OnMapRe
                         .jointType(JointType.ROUND)
                         .startCap(new RoundCap())
                         .endCap(new RoundCap());
-                final com.google.android.gms.maps.model.Polyline animatedPolyline = gMap.addPolyline(polylineOptions);
+                animatedPolyline = gMap.addPolyline(polylineOptions);
 
-                // Moving marker with custom image
-                final Marker movingMarker = gMap.addMarker(new MarkerOptions()
-                        .position(latLngList.get(0))
+                // Moving marker
+                movingMarker = gMap.addMarker(new MarkerOptions()
+                        .position(polylinePoints.get(0))
                         .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))
                         .title("Riding...")
                 );
 
-                // Fit camera with extra padding
+                // Fit camera
                 LatLngBounds.Builder builder = new LatLngBounds.Builder();
-                for (LatLng point : latLngList) builder.include(point);
-                gMap.moveCamera(CameraUpdateFactory.newLatLngBounds(builder.build(), 350));
+                for (LatLng point : polylinePoints) builder.include(point);
+                gMap.moveCamera(CameraUpdateFactory.newLatLngBounds(builder.build(), 150));
 
-                // Animate polyline and marker, show end marker after animation
-                animatePolylineAndMarker(latLngList, animatedPolyline, movingMarker, latLngList.get(latLngList.size() - 1));
+                // Start animation
+                startPolylineAnimation();
             }
 
             // Compute total distance
-            for (int i = 1; i < latLngList.size(); i++) {
-                totalDistanceKm += distanceBetween(latLngList.get(i - 1), latLngList.get(i));
+            for (int i = 1; i < polylinePoints.size(); i++) {
+                totalDistanceKm += distanceBetween(polylinePoints.get(i - 1), polylinePoints.get(i));
             }
             distanceText.setText(String.format("%.2f km", totalDistanceKm));
-        } else {
-            distanceText.setText("-");
-        }
+        } else distanceText.setText("-");
 
         // Duration, Start/End Time, Average Speed
         try {
@@ -173,7 +197,7 @@ public class HistoryDetailsActivity extends AppCompatActivity implements OnMapRe
             endTimeText.setText("-");
         }
 
-        // Load payment
+        // Payment
         String paymentId = rideDoc.getString("paymentId");
         if (paymentId != null && !paymentId.isEmpty()) {
             FirebaseFirestore.getInstance()
@@ -200,39 +224,42 @@ public class HistoryDetailsActivity extends AppCompatActivity implements OnMapRe
         }
     }
 
-    // Animate polyline and moving marker
-    private void animatePolylineAndMarker(List<LatLng> points,
-                                          com.google.android.gms.maps.model.Polyline polyline,
-                                          Marker marker,
-                                          LatLng endPoint) {
+    // ================= Polyline Animation =================
+    private void startPolylineAnimation() {
+        polylineHandler = new Handler(Looper.getMainLooper());
+        polylineIndex = 0;
+        isAnimating = true;
 
-        final Handler handler = new Handler(Looper.getMainLooper());
-        final int[] index = {0};
-        final List<LatLng> animatedPoints = new ArrayList<>();
-
-        Runnable runnable = new Runnable() {
+        polylineRunnable = new Runnable() {
             @Override
             public void run() {
-                if (index[0] < points.size()) {
-                    animatedPoints.add(points.get(index[0]));
-                    polyline.setPoints(animatedPoints);
+                if (!isAnimating) return; // pause if needed
 
-                    marker.setPosition(points.get(index[0]));
-                    index[0]++;
-                    handler.postDelayed(this, 15); // faster animation
+                if (polylineIndex < polylinePoints.size()) {
+                    List<LatLng> sublist = polylinePoints.subList(0, polylineIndex + 1);
+                    animatedPolyline.setPoints(sublist);
+                    movingMarker.setPosition(polylinePoints.get(polylineIndex));
+                    polylineIndex++;
+                    polylineHandler.postDelayed(this, 15);
                 } else {
-                    // Animation finished, add end marker with custom image
+                    // End marker
                     gMap.addMarker(new MarkerOptions()
-                            .position(endPoint)
+                            .position(polylinePoints.get(polylinePoints.size() - 1))
                             .title("End")
                             .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN))
                     );
+                    isAnimating = false;
                 }
             }
         };
-        handler.post(runnable);
+        polylineHandler.post(polylineRunnable);
     }
 
+    private void pausePolylineAnimation() {
+        isAnimating = false;
+    }
+
+    // ================= Distance Calculation =================
     private double distanceBetween(LatLng p1, LatLng p2) {
         double R = 6371;
         double dLat = Math.toRadians(p2.latitude - p1.latitude);
@@ -244,6 +271,70 @@ public class HistoryDetailsActivity extends AppCompatActivity implements OnMapRe
         return R * c;
     }
 
+    // ================= Popup Menu & Delete =================
+    private void showPopupMenu(View view) {
+        if (rideId == null) return;
+
+        PopupMenu popupMenu = new PopupMenu(this, view);
+        popupMenu.getMenu().add("Delete Ride");
+        popupMenu.setOnMenuItemClickListener(item -> {
+            if ("Delete Ride".equals(item.getTitle())) {
+                confirmDeleteRide(rideId);
+                return true;
+            }
+            return false;
+        });
+        popupMenu.show();
+    }
+
+    private void confirmDeleteRide(String rideId) {
+        new AlertDialog.Builder(this)
+                .setTitle("Delete Ride")
+                .setMessage("Are you sure you want to delete this ride? This action cannot be undone.")
+                .setPositiveButton("Delete", (dialog, which) -> deleteRide(rideId))
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void deleteRide(String rideId) {
+        pausePolylineAnimation();
+        showLoading();
+
+        FirebaseFirestore.getInstance()
+                .collection("ride_logs")
+                .document(rideId)
+                .delete()
+                .addOnSuccessListener(aVoid -> {
+                    hideLoading();
+                    Toast.makeText(this, "Ride deleted successfully", Toast.LENGTH_SHORT).show();
+
+                    Intent intent = new Intent(this, LogHistoryActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(intent);
+                    finish();
+                })
+                .addOnFailureListener(e -> {
+                    hideLoading();
+                    Toast.makeText(this, "Failed to delete ride: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                });
+    }
+
+    // ================= Loading Overlay =================
+    private void setupLoadingOverlay() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setView(R.layout.dialog_loading).setCancelable(false);
+        loadingDialog = builder.create();
+    }
+
+    private void showLoading() {
+        if (loadingDialog != null && !loadingDialog.isShowing()) loadingDialog.show();
+    }
+
+    private void hideLoading() {
+        if (loadingDialog != null && loadingDialog.isShowing()) loadingDialog.dismiss();
+    }
+
+    // ================= Map Lifecycle =================
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         gMap = googleMap;
@@ -255,6 +346,7 @@ public class HistoryDetailsActivity extends AppCompatActivity implements OnMapRe
     @Override protected void onStop() { mapView.onStop(); super.onStop(); }
     @Override protected void onDestroy() { mapView.onDestroy(); super.onDestroy(); }
     @Override public void onLowMemory() { super.onLowMemory(); mapView.onLowMemory(); }
+
     @Override
     protected void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
