@@ -2094,13 +2094,13 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                     com.google.firebase.database.DataSnapshot latestSnapshot = bikeSnapshot.child("latest");
                     
                     // Parse latitude and longitude as strings
-                    String latStr = latestSnapshot.child("latitude").getValue(String.class);
-                    String lngStr = latestSnapshot.child("longitude").getValue(String.class);
-                    
-                    if (latStr != null && lngStr != null && bikeId != null) {
+                    Object latObj = latestSnapshot.child("latitude").getValue();
+                    Object lngObj = latestSnapshot.child("longitude").getValue();
+
+                    if (latObj != null && lngObj != null && bikeId != null) {
                         try {
-                            double lat = Double.parseDouble(latStr);
-                            double lng = Double.parseDouble(lngStr);
+                            double lat = Double.parseDouble(latObj.toString());
+                            double lng = Double.parseDouble(lngObj.toString());
                             LatLng bikeLocation = new LatLng(lat, lng);
                             
                             // Get bike status from Firestore bikes collection
