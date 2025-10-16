@@ -107,6 +107,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import android.os.Handler;
+import android.os.Looper;
 
 import com.google.android.gms.location.GeofencingClient;
 
@@ -1185,6 +1187,14 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         if (currentLocation != null && userMarker == null) {
             createUserMarker();
         }
+        
+        // Add a delayed check to ensure user marker appears even if location takes time
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            if (userMarker == null && currentLocation != null) {
+                Log.d("MainPage", "Creating delayed user marker");
+                createUserMarker();
+            }
+        }, 2000); // 2 second delay
     }
 
     private void loadActiveGeofenceFromFirestore() {
@@ -1278,7 +1288,16 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 
-        if (requestCode == 101) {
+        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // Location permission granted - enable location services
+                enableMyLocation();
+                Log.d("MainPage", "Location permission granted");
+            } else {
+                Toast.makeText(this, "Location permission denied. Please enable location access to use the app.", Toast.LENGTH_LONG).show();
+                Log.e("MainPage", "Location permission denied");
+            }
+        } else if (requestCode == 101) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 // Permission granted – you can post notifications now
             } else {
@@ -1373,7 +1392,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 if (loc == null) return;
                 
                 // Filter out inaccurate locations to prevent marker jumping
-                if (loc.getAccuracy() > 50.0f) { // Only accept locations with accuracy better than 50 meters
+                if (loc.getAccuracy() > 100.0f) { // Only accept locations with accuracy better than 100 meters
                     Log.d("MainPage", "Location accuracy too low: " + loc.getAccuracy() + "m, skipping update");
                     return;
                 }
@@ -1450,11 +1469,13 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         ) != PackageManager.PERMISSION_GRANTED
         ) return;
 
+        // Enable the built-in location layer first
+        mMap.setMyLocationEnabled(true);
+        
         fusedLocationClient.getLastLocation()
                 .addOnSuccessListener(loc -> {
                     if (loc != null) {
                         currentLocation = new LatLng(loc.getLatitude(), loc.getLongitude());
-                        mMap.setMyLocationEnabled(true);
                         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
                         
                         // Create user marker immediately when location is available
@@ -1465,13 +1486,25 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                         
                         Log.d("MainPage", "Location obtained: " + currentLocation);
                     } else {
-                        Toast.makeText(this, "Unable to fetch location", Toast.LENGTH_SHORT).show();
-                        Log.e("MainPage", "Location is null");
+                        // If last location is null, start location updates anyway
+                        Log.w("MainPage", "Last location is null, starting location updates");
+                        startLocationUpdates();
+                        
+                        // Show a default location (Manila area) as fallback
+                        currentLocation = new LatLng(14.5995, 120.9842); // Manila coordinates
+                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
+                        createUserMarker();
                     }
                 })
                 .addOnFailureListener(e -> {
                     Log.e("MainPage", "Failed to get location", e);
-                    Toast.makeText(this, "Failed to get location: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    // Start location updates anyway as a fallback
+                    startLocationUpdates();
+                    
+                    // Show a default location (Manila area) as fallback
+                    currentLocation = new LatLng(14.5995, 120.9842); // Manila coordinates
+                    mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
+                    createUserMarker();
                 });
     }
     
