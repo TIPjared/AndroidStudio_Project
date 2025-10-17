@@ -32,6 +32,16 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.firebase.firestore.FirebaseFirestore;
 
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
+import com.android.volley.toolbox.JsonObjectRequest;
+import com.android.volley.toolbox.Volley;
+
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -45,6 +55,8 @@ public class MainActivity extends AppCompatActivity {
     private static final int RC_SIGN_IN = 123;
     private GoogleSignInClient mGoogleSignInClient;
     private View googleSignInButton;
+
+    private static final String SERVER_URL = "https://philsms-otp-server.onrender.com/send-otp";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -157,7 +169,6 @@ public class MainActivity extends AppCompatActivity {
             emailField.requestFocus();
             return;
         }
-
         if (password.isEmpty()) {
             passwordField.setError("Password is required");
             passwordField.requestFocus();
@@ -169,13 +180,7 @@ public class MainActivity extends AppCompatActivity {
                     if (task.isSuccessful()) {
                         FirebaseUser user = mAuth.getCurrentUser();
                         if (user != null) {
-                            // ✅ Directly proceed to MainPage (OTP check removed)
-                            Intent intent = new Intent(MainActivity.this, MainPage.class);
-                            startActivity(intent);
-                            finish();
-
-                            // ❌ Disabled:
-                            // checkOTPRequirement(user.getUid());
+                            checkOTPRequirement(user.getUid());
                         }
                     } else {
                         Toast.makeText(MainActivity.this,
@@ -185,11 +190,6 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
-    /*
-    ===================================================
-     OTP FEATURE COMMENTED OUT (BYPASSED)
-    ===================================================
-
     private void checkOTPRequirement(String userId) {
         FirebaseFirestore db = FirebaseFirestore.getInstance();
         db.collection("users").document(userId)
@@ -198,7 +198,7 @@ public class MainActivity extends AppCompatActivity {
                     if (document.exists()) {
                         Boolean phoneVerified = document.getBoolean("phoneVerified");
                         String savedDeviceId = document.getString("deviceId");
-                        String phoneNumber = document.getString("phone");
+                        String phoneNumber = document.contains("phone") ? document.getString("phone") : "";
 
                         String currentDeviceId = Settings.Secure.getString(
                                 getContentResolver(), Settings.Secure.ANDROID_ID);
@@ -208,7 +208,12 @@ public class MainActivity extends AppCompatActivity {
                             startActivity(new Intent(MainActivity.this, MainPage.class));
                             finish();
                         } else {
-                            sendOtpRequest(phoneNumber, userId);
+                            db.collection("users").document(userId)
+                                    .update("phoneVerified", false)
+                                    .addOnSuccessListener(unused -> sendOtpRequest(phoneNumber, userId))
+                                    .addOnFailureListener(e -> {
+                                        Toast.makeText(MainActivity.this, "Error resetting phone verification", Toast.LENGTH_SHORT).show();
+                                    });
                         }
                     } else {
                         FirebaseUser user = mAuth.getCurrentUser();
@@ -229,9 +234,8 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
                 })
-                .addOnFailureListener(e -> {
-                    Toast.makeText(MainActivity.this, "Error fetching user data", Toast.LENGTH_SHORT).show();
-                });
+                .addOnFailureListener(e ->
+                        Toast.makeText(MainActivity.this, "Error fetching user data", Toast.LENGTH_SHORT).show());
     }
 
     private String normalizePhone(String raw) {
@@ -249,30 +253,52 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        runOnUiThread(() -> {
-            Intent intent = new Intent(MainActivity.this, OTPVerification.class);
-            intent.putExtra("phone", phoneNumber);
-            intent.putExtra("userId", userId);
-            startActivity(intent);
-            finish();
-        });
-    }
+        String normalizedPhone = normalizePhone(phoneNumber);
 
-    private void showTrialAccountError(String phoneNumber, String userId) {
-        new android.app.AlertDialog.Builder(this)
-                .setTitle("Phone Number Verification Required")
-                .setMessage("Your phone number (" + phoneNumber + ") needs to be verified with Twilio to receive SMS.\n\n" +
-                           "To fix this:\n" +
-                           "1. Go to twilio.com/user/account/phone-numbers/verified\n" +
-                           "2. Add and verify your phone number\n" +
-                           "3. Or upgrade to a paid Twilio account\n\n" +
-                           "Please verify your phone number and try again.")
-                .setPositiveButton("OK", (dialog, which) -> finish())
-                .setCancelable(false)
-                .show();
+        try {
+            JSONObject jsonBody = new JSONObject();
+            jsonBody.put("phone", normalizedPhone);
+
+            RequestQueue queue = Volley.newRequestQueue(this);
+            JsonObjectRequest request = new JsonObjectRequest(
+                    Request.Method.POST,
+                    SERVER_URL,
+                    jsonBody,
+                    new Response.Listener<JSONObject>() {
+                        @Override
+                        public void onResponse(JSONObject response) {
+                            try {
+                                boolean success = response.getBoolean("success");
+                                if (success) {
+                                    Toast.makeText(MainActivity.this, "OTP sent to " + normalizedPhone, Toast.LENGTH_SHORT).show();
+
+                                    Intent intent = new Intent(MainActivity.this, OTPVerification.class);
+                                    intent.putExtra("fromLogin", true);
+                                    startActivity(intent);
+                                    finish();
+
+                                } else {
+                                    String message = response.optString("message", "Failed to send OTP");
+                                    Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
+                                }
+                            } catch (JSONException e) {
+                                Toast.makeText(MainActivity.this, "Invalid server response", Toast.LENGTH_SHORT).show();
+                            }
+                        }
+                    },
+                    new Response.ErrorListener() {
+                        @Override
+                        public void onErrorResponse(VolleyError error) {
+                            Toast.makeText(MainActivity.this, "Failed to send OTP: " + error.getMessage(), Toast.LENGTH_SHORT).show();
+                        }
+                    }
+            );
+
+            queue.add(request);
+        } catch (JSONException e) {
+            Toast.makeText(this, "Error creating request", Toast.LENGTH_SHORT).show();
+        }
     }
-    ===================================================
-    */
 
     private void signInWithGoogle() {
         Log.d("GoogleSignIn", "Starting Google Sign-In...");
