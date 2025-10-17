@@ -73,6 +73,7 @@ dependencies {
     implementation ("com.google.android.gms:play-services-maps:18.0.2")
     implementation ("com.google.android.gms:play-services-location:17.0.0")
     implementation ("com.google.guava:guava:31.1-android")
+    implementation ("com.android.volley:volley:1.2.1")
 
     //Cameras
     implementation ("androidx.camera:camera-core:1.3.0")

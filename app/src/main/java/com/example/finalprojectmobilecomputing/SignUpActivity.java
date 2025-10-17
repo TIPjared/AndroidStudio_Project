@@ -212,10 +212,8 @@ public class SignUpActivity extends AppCompatActivity {
                                                         Toast.makeText(SignUpActivity.this, "Account created! Please verify your phone number.", Toast.LENGTH_SHORT).show();
                                                         
                                                         // Navigate to OTP Verification for new sign-up
-                                                        Intent intent = new Intent(SignUpActivity.this, OTPVerification.class);
-                                                        intent.putExtra("phone", phone);
-                                                        intent.putExtra("userId", userId);
-                                                        intent.putExtra("isNewSignUp", true); // Flag to indicate this is a new sign-up
+                                                        Intent intent = new Intent(SignUpActivity.this, MainActivity.class);
+                                                        intent.putExtra("phone", phone); // optional, if you want to prefill phone
                                                         startActivity(intent);
                                                         finish();
                                                     })
