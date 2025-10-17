@@ -2044,7 +2044,8 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             @Override
             public void onDataChange(@NonNull com.google.firebase.database.DataSnapshot snapshot) {
                 if (snapshot.exists()) {
-                    String status = snapshot.getValue(String.class);
+                    Object value = snapshot.getValue();         // Read as Object
+                    String status = String.valueOf(value);      // Convert safely to String
                     Log.d("MainPage", "Bike status updated: " + status);
                     // Handle bike status changes here if needed
                 }
@@ -2318,16 +2319,16 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 }
                 
                 // Parse latitude and longitude as strings
-                String latStr = snapshot.child("latitude").getValue(String.class);
-                String lngStr = snapshot.child("longitude").getValue(String.class);
+                Object latStr = snapshot.child("latitude").getValue();
+                Object lngStr = snapshot.child("longitude").getValue();
                 String timestampStr = snapshot.child("timestamp").getValue(String.class);
-                
+
                 if (latStr != null && lngStr != null) {
                     try {
-                        double lat = Double.parseDouble(latStr);
-                        double lng = Double.parseDouble(lngStr);
+                        double lat = Double.parseDouble(latStr.toString());
+                        double lng = Double.parseDouble(lngStr.toString());
                         LatLng newBikeLocation = new LatLng(lat, lng);
-                        
+
                         // Check if bike location has changed significantly to prevent unnecessary updates
                         if (rentedBikeLocation != null) {
                             float[] results = new float[1];
@@ -2340,9 +2341,9 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                                 return;
                             }
                         }
-                        
+
                         rentedBikeLocation = newBikeLocation;
-                        
+
                         // Update or create bike marker with enhanced smooth animation
                         if (bikeMarker == null) {
                             MarkerOptions markerOptions = new MarkerOptions()
@@ -2354,25 +2355,25 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                         } else {
                             animateMarkerWithInterpolation(bikeMarker, rentedBikeLocation, false);
                         }
-                        
+
                         // Update marker visibility based on distance
                         updateMarkerVisibility();
-                        
-                        Log.d("BikeRental", "Rented bike location updated: " + rentedBikeLocation + 
+
+                        Log.d("BikeRental", "Rented bike location updated: " + rentedBikeLocation +
                               (timestampStr != null ? " (timestamp: " + timestampStr + ")" : ""));
                     } catch (NumberFormatException e) {
                         Log.e("BikeRental", "Failed to parse bike coordinates", e);
                     }
                 }
             }
-            
+
             @Override
             public void onCancelled(@NonNull com.google.firebase.database.DatabaseError error) {
                 Log.e("BikeRental", "Failed to get rented bike location: " + error.getMessage());
             }
         });
     }
-    
+
     /**
      * Calculate distance between user and rented bike
      * Show/hide user marker based on proximity
