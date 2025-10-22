@@ -51,6 +51,7 @@
             android:name=".GeofenceBroadcastReceiver"
             android:exported="true" />
 
+
         <!-- Google Maps API Key -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
