@@ -193,9 +193,10 @@ public class TermsOfServiceActivity extends AppCompatActivity {
                 
                 "15. CONTACT INFORMATION\n\n" +
                 "For questions about these Terms of Service:\n" +
-                "• Email: support@sikad.com\n" +
-                "• Phone: +63-XXX-XXX-XXXX\n" +
-                "• Address: Technological Institute of the Philippines, Manila\n" +
+                "• Email: agvclubhouse@antel.com.ph\n" +
+                "• Mobile: 0917-704-0323, 0917-708-0567\n" +
+                "• Office: Accounting 436-6026, Admin 436-6745\n" +
+                "• Address: Antel Grand Village - A Quiet Place in the City\n" +
                 "• Community Administrator: Available through app\n\n" +
                 
                 "These Terms of Service are designed specifically for the Sikad community bike rental system and reflect our commitment to providing safe, efficient, and sustainable transportation services.";

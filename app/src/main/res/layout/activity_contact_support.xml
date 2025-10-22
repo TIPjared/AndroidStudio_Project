@@ -106,7 +106,7 @@
                                 android:id="@+id/emailContact"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="support@sikad.com"
+                                android:text="agvclubhouse@antel.com.ph"
                                 android:textColor="#4CAF50"
                                 android:textSize="16sp"
                                 android:textStyle="bold" />
@@ -141,7 +141,7 @@
                         <ImageView
                             android:layout_width="24dp"
                             android:layout_height="24dp"
-                            android:src="@drawable/baseline_arrow_forward_24"
+                            android:src="@android:drawable/ic_menu_call"
                             app:tint="#4CAF50" />
 
                         <LinearLayout
@@ -155,7 +155,7 @@
                                 android:id="@+id/phoneContact"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="+63-2-1234-5678"
+                                android:text="0917-704-0323"
                                 android:textColor="#4CAF50"
                                 android:textSize="16sp"
                                 android:textStyle="bold" />
@@ -296,7 +296,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="For urgent safety issues, bike theft, or accidents:\n\nCall: +63-2-1234-5678 (24/7)\nEmail: emergency@sikad.com"
+                        android:text="For urgent safety issues, bike theft, or accidents:\n\nCall: 0917-704-0323 or 0917-708-0567 (24/7)\nEmail: agvclubhouse@antel.com.ph"
                         android:textColor="#333333"
                         android:textSize="14sp" />
                 </LinearLayout>
