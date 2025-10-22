@@ -200,21 +200,32 @@ public class MainActivity extends AppCompatActivity {
                         String savedDeviceId = document.getString("deviceId");
                         String phoneNumber = document.contains("phone") ? document.getString("phone") : "";
 
-                        String currentDeviceId = Settings.Secure.getString(
-                                getContentResolver(), Settings.Secure.ANDROID_ID);
+                        String currentDeviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
 
-                        if (phoneVerified != null && phoneVerified &&
-                                savedDeviceId != null && savedDeviceId.equals(currentDeviceId)) {
-                            startActivity(new Intent(MainActivity.this, MainPage.class));
-                            finish();
+                        if (phoneVerified != null && phoneVerified) {
+                            if (savedDeviceId != null && savedDeviceId.equals(currentDeviceId)) {
+                                // Already verified on this device → go to MainPage
+                                startActivity(new Intent(MainActivity.this, MainPage.class));
+                                finish();
+                                return;
+                            } else {
+                                // New device, send OTP but don't reset phoneVerified globally
+                                if (phoneNumber != null && !phoneNumber.isEmpty()) {
+                                    sendOtpRequest(phoneNumber, userId);
+                                } else {
+                                    Toast.makeText(this, "No phone number found", Toast.LENGTH_SHORT).show();
+                                }
+                                return;
+                            }
                         } else {
-                            db.collection("users").document(userId)
-                                    .update("phoneVerified", false)
-                                    .addOnSuccessListener(unused -> sendOtpRequest(phoneNumber, userId))
-                                    .addOnFailureListener(e -> {
-                                        Toast.makeText(MainActivity.this, "Error resetting phone verification", Toast.LENGTH_SHORT).show();
-                                    });
+                            // Not verified → send OTP
+                            if (phoneNumber != null && !phoneNumber.isEmpty()) {
+                                sendOtpRequest(phoneNumber, userId);
+                            } else {
+                                Toast.makeText(this, "No phone number found", Toast.LENGTH_SHORT).show();
+                            }
                         }
+
                     } else {
                         FirebaseUser user = mAuth.getCurrentUser();
                         if (user != null) {
@@ -230,13 +241,16 @@ public class MainActivity extends AppCompatActivity {
                             newUser.put("createdAt", System.currentTimeMillis());
                             db.collection("users").document(userId).set(newUser);
 
-                            sendOtpRequest(user.getPhoneNumber(), userId);
+                            if (user.getPhoneNumber() != null && !user.getPhoneNumber().isEmpty()) {
+                                sendOtpRequest(user.getPhoneNumber(), userId);
+                            }
                         }
                     }
                 })
                 .addOnFailureListener(e ->
                         Toast.makeText(MainActivity.this, "Error fetching user data", Toast.LENGTH_SHORT).show());
     }
+
 
     private String normalizePhone(String raw) {
         if (raw == null) return "";

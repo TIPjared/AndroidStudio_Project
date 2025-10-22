@@ -177,22 +177,28 @@ public class OTPVerification extends AppCompatActivity {
                     response -> {
                         boolean success = response.optBoolean("success", false);
                         if (success) {
-
                             FirebaseFirestore db = FirebaseFirestore.getInstance();
+                            String deviceId = android.provider.Settings.Secure.getString(
+                                    getContentResolver(),
+                                    android.provider.Settings.Secure.ANDROID_ID
+                            );
+
                             db.collection("users").document(userId)
-                                    .update("phoneVerified", true)
-                                    .addOnSuccessListener(aVoid -> Log.d("OTP", "User verified in Firestore"))
+                                    .update(
+                                            "phoneVerified", true,
+                                            "deviceId", deviceId
+                                    )
+                                    .addOnSuccessListener(aVoid -> Log.d("OTP", "User verified & device ID saved"))
                                     .addOnFailureListener(e -> Log.e("OTP", "Failed to update verification", e));
 
                             Toast.makeText(this, "OTP Verified!", Toast.LENGTH_SHORT).show();
 
-                            // Navigate to main page
                             Intent intent = new Intent(this, MainPage.class);
                             intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-
                             startActivity(intent);
                             finish();
-                        } else {
+                        }
+                    else {
                             Toast.makeText(this, response.optString("message", "Invalid OTP"), Toast.LENGTH_SHORT).show();
                         }
                     },

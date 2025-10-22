@@ -15,7 +15,12 @@ import android.graphics.Path;
 import android.graphics.drawable.Drawable;
 import android.graphics.PorterDuff;
 import android.content.Context;
+import android.media.MediaPlayer;
+import android.media.Ringtone;
+import android.media.RingtoneManager;
 import android.os.SystemClock;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.view.animation.Interpolator;
 import android.view.animation.LinearInterpolator;
 import androidx.core.content.ContextCompat;
@@ -41,6 +46,9 @@ import android.content.res.ColorStateList;
 import android.util.TypedValue;
 import com.google.android.material.button.MaterialButton;
 
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.firestore.CollectionReference;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
 import com.google.gson.Gson;
@@ -177,6 +185,14 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     // Emergency alert system
     private EmergencyAlertDialog emergencyAlert;
 
+    // ALERTS WIGGLE
+    MediaPlayer mediaPlayer;
+    private Vibrator vibrator;
+
+    private boolean isOutOfGeofence = false;
+    private boolean alertScreenActive = false;
+    private static final int ALERT_REQUEST_CODE = 101;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -303,26 +319,23 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             } else {
                 if (currentLocation != null && activeGeofencePoints != null && !activeGeofencePoints.isEmpty()) {
 
-                    // ===== Temporarily disabled geofence check =====
-            /*
-            if (PolyUtil.containsLocation(
-                    new LatLng(currentLocation.latitude, currentLocation.longitude),
-                    antelBoundary,
-                    true
-            )) {
-                showRideDurationDialog();
-            } else {
-                Toast.makeText(this, "You must be inside Antel Grand Village to start a ride.", Toast.LENGTH_SHORT).show();
-            }
-            */
+                    boolean isInside = PolyUtil.containsLocation(
+                            new LatLng(currentLocation.latitude, currentLocation.longitude),
+                            activeGeofencePoints,
+                            true
+                    );
 
-
-                    // Navigate to ride duration selection page
-                    Intent intent = new Intent(MainPage.this, RideDurationActivity.class);
-                    startActivity(intent);
+                    if (isInside) {
+                        // ✅ Only allow access if inside geofence
+                        Intent intent = new Intent(MainPage.this, RideDurationActivity.class);
+                        startActivity(intent);
+                    } else {
+                        // 🚫 Show warning if outside area
+                        Toast.makeText(this, "You must be inside Antel Grand Village to start a ride.", Toast.LENGTH_SHORT).show();
+                    }
 
                 } else {
-                    // Try to create user marker if location is available but marker doesn't exist
+                    // ⚠️ Location not yet available
                     if (currentLocation != null && userMarker == null) {
                         createUserMarker();
                     }
@@ -330,6 +343,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 }
             }
         });
+
 
 
         stopButton.setOnClickListener(v -> {
@@ -462,8 +476,8 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
         IntentFilter filter = new IntentFilter(RideTimerService.ACTION_UPDATE_UI);
 
-        // ✅ FIX: Add proper receiver flag for Android 12+
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        // ✅ Fix: Handle Android 12+ properly
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) { // Android 12+
             registerReceiver(rideUpdateReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         } else {
             registerReceiver(rideUpdateReceiver, filter);
@@ -799,7 +813,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
     private void startRideTimer() {
         rideStartTime = System.currentTimeMillis();
-        
+
         // Initialize ride tracking
         ridePathPoints.clear();
         if (bikeMarker != null) {
@@ -811,7 +825,23 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             ridePath = null;
         }
 
-        countDownTimer = new CountDownTimer(30 * 60 * 1000, 1000) {
+        // ✅ Get selected duration from AppData
+        String rideTime = AppData.getInstance().getRideTime();
+        long durationMillis;
+        switch (rideTime) {
+            case "45 minutes":
+                durationMillis = 45 * 60 * 1000;
+                break;
+            case "1 hour":
+                durationMillis = 60 * 60 * 1000;
+                break;
+            default:
+                durationMillis = 30 * 60 * 1000;
+                break;
+        }
+        // ✅ Start dynamic timer
+        countDownTimer = new CountDownTimer(durationMillis, 1000) {
+            boolean alertShown = false; // declare here — scoped to timer
             public void onTick(long millisUntilFinished) {
                 int seconds = (int) (millisUntilFinished / 1000);
                 int minutes = seconds / 60;
@@ -819,6 +849,13 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
                 String time = String.format(Locale.getDefault(), "Time Left: %02d:%02d", minutes, seconds);
                 timerTextView.setText(time);
+
+                if (millisUntilFinished <= 2 * 60 * 1000 && !alertShown) {
+                    alertShown = true;
+                    Intent intent = new Intent(MainPage.this, RideTimeAlertActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(intent);
+                }
             }
 
             public void onFinish() {
@@ -827,7 +864,6 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             }
         }.start();
     }
-
 
 
     private void stopRideTimer() {
@@ -1390,15 +1426,15 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
                 Location loc = locationResult.getLastLocation();
                 if (loc == null) return;
-                
+
                 // Filter out inaccurate locations to prevent marker jumping
                 if (loc.getAccuracy() > 100.0f) { // Only accept locations with accuracy better than 100 meters
                     Log.d("MainPage", "Location accuracy too low: " + loc.getAccuracy() + "m, skipping update");
                     return;
                 }
-                
+
                 LatLng currentLatLng = new LatLng(loc.getLatitude(), loc.getLongitude());
-                
+
                 // Check if location has changed significantly to avoid unnecessary updates
                 if (currentLocation != null) {
                     float[] results = new float[1];
@@ -1421,7 +1457,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 } else {
                     createUserMarkerWithAntiStuck();
                 }
-                
+
                 Log.d("MainPage", "Location updated: " + currentLatLng + " (accuracy: " + loc.getAccuracy() + "m), userMarker exists: " + (userMarker != null));
 
                 // Update marker visibility based on proximity to rented bike
@@ -1443,24 +1479,15 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                     // Move camera to follow the bike
                     mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 18f));
                 }
-
-                // Polygon check for precision
-                if (antelBoundary != null && !antelBoundary.isEmpty()) {
-                    if (!PolyUtil.containsLocation(currentLatLng, antelBoundary, true)) {
-                        Toast.makeText(MainPage.this, "Outside village boundary!", Toast.LENGTH_LONG).show();
-                    } else {
-                        Log.d("GEOFENCE", "Inside village boundary");
-                    }
-                }
             }
         };
-
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED) {
             LocationServices.getFusedLocationProviderClient(this)
                     .requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper());
         }
     }
+
 
     private void enableMyLocation() {
         if (ActivityCompat.checkSelfPermission(
@@ -2034,12 +2061,12 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             Log.d("MainPage", "No current user ID, skipping bike status listener");
             return;
         }
-        
+
         // Listen to bike status for the current user
         bikeStatusRef = FirebaseDatabase.getInstance()
             .getReference("bikeStatus")
             .child(currentUserId);
-            
+
         bikeListener = new com.google.firebase.database.ValueEventListener() {
             @Override
             public void onDataChange(@NonNull com.google.firebase.database.DataSnapshot snapshot) {
@@ -2050,13 +2077,13 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                     // Handle bike status changes here if needed
                 }
             }
-            
+
             @Override
             public void onCancelled(@NonNull com.google.firebase.database.DatabaseError error) {
                 Log.e("MainPage", "Bike status listener cancelled: " + error.getMessage());
             }
         };
-        
+
         bikeStatusRef.addValueEventListener(bikeListener);
     }
 
@@ -2329,6 +2356,16 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                         double lng = Double.parseDouble(lngStr.toString());
                         LatLng newBikeLocation = new LatLng(lat, lng);
 
+                        boolean inside = isWithinGeofence(newBikeLocation);
+
+                        if (!inside && !alertScreenActive) {
+                            alertScreenActive = true;
+                            triggerAlertScreen();
+                        } else if (inside && alertScreenActive) {
+                            alertScreenActive = false;
+                            stopAlertScreen();
+                        }
+
                         // Check if bike location has changed significantly to prevent unnecessary updates
                         if (rentedBikeLocation != null) {
                             float[] results = new float[1];
@@ -2372,6 +2409,23 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 Log.e("BikeRental", "Failed to get rented bike location: " + error.getMessage());
             }
         });
+    }
+
+    private boolean isWithinGeofence(LatLng location) {
+        if (activeGeofencePoints == null || activeGeofencePoints.isEmpty()) return true;
+        return PolyUtil.containsLocation(location, activeGeofencePoints, false);
+    }
+
+    private void triggerAlertScreen() {
+        Intent intent = new Intent(MainPage.this, AlertActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(intent);
+    }
+
+    private void stopAlertScreen() {
+        // Send broadcast to stop AlertActivity
+        Intent stopIntent = new Intent("STOP_ALERT");
+        androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(this).sendBroadcast(stopIntent);
     }
 
     /**
