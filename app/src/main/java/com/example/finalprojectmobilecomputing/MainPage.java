@@ -154,6 +154,10 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     private static final float PROXIMITY_THRESHOLD_METERS = 30f; // Distance to hide user marker
     private DatabaseReference bikesRef; // Reference to bikes in Firebase
     
+    // GPS tracking listener management
+    private com.google.firebase.database.ValueEventListener bikeGPSListener;
+    private DatabaseReference rentedBikeGPSRef;
+    
     // Enhanced real-time tracking variables
     private LatLng lastUserLocation = null; // Last known user location for interpolation
     private LatLng lastBikeLocation = null; // Last known bike location for interpolation
@@ -2328,10 +2332,48 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             }
         }
         
+        // Clean up bike status listener
         if (bikeListener != null && bikeStatusRef != null) {
             bikeStatusRef.removeEventListener(bikeListener);
             bikeListener = null;
             bikeStatusRef = null;
+            Log.d("MainPage", "Bike status listener cleaned up");
+        }
+        
+        // Clean up bike GPS listener
+        if (bikeGPSListener != null && rentedBikeGPSRef != null) {
+            rentedBikeGPSRef.removeEventListener(bikeGPSListener);
+            bikeGPSListener = null;
+            rentedBikeGPSRef = null;
+            Log.d("MainPage", "Bike GPS listener cleaned up");
+        }
+        
+        // Clean up interpolation handler
+        if (interpolationHandler != null) {
+            interpolationHandler.removeCallbacksAndMessages(null);
+            Log.d("MainPage", "Interpolation handler cleaned up");
+        }
+    }
+    
+    @Override
+    protected void onPause() {
+        super.onPause();
+        
+        // Pause GPS tracking when app goes to background
+        if (bikeGPSListener != null && rentedBikeGPSRef != null) {
+            rentedBikeGPSRef.removeEventListener(bikeGPSListener);
+            Log.d("MainPage", "GPS tracking paused in onPause()");
+        }
+    }
+    
+    @Override
+    protected void onResume() {
+        super.onResume();
+        
+        // Resume GPS tracking if bike is rented
+        if (transactionAuthorized && rentedBikeId != null) {
+            listenToRentedBikeGPS(rentedBikeId);
+            Log.d("MainPage", "GPS tracking resumed in onResume()");
         }
     }
 
@@ -2438,6 +2480,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     private void startRental(String bikeId) {
         rentedBikeId = bikeId;
         Log.d("BikeRental", "Starting rental for bike: " + bikeId);
+        Log.d("BikeRental", "Payment completed - starting GPS tracking for bike: " + bikeId);
         
         // Update bike status in Firestore
         Map<String, Object> rentalUpdate = new HashMap<>();
@@ -2457,7 +2500,8 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         // Remove all existing bike markers completely to prevent duplicates
         removeAllBikeMarkers();
         
-        // Listen to rented bike GPS updates
+        // Start GPS tracking for the rented bike (this is the key fix!)
+        Log.d("BikeRental", "Starting GPS tracking for rented bike: " + bikeId);
         listenToRentedBikeGPS(bikeId);
         
         // Hide user marker immediately when ride starts
@@ -2474,7 +2518,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         // Update marker visibility to show only bike
         updateMarkerVisibility();
         
-        Toast.makeText(this, "Rental started for bike " + bikeId, Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Rental started for bike " + bikeId + " - GPS tracking active", Toast.LENGTH_SHORT).show();
     }
     
     /**
@@ -2487,6 +2531,14 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         }
         
         Log.d("BikeRental", "Ending rental for bike: " + rentedBikeId);
+        
+        // Stop GPS tracking for the rented bike
+        if (bikeGPSListener != null && rentedBikeGPSRef != null) {
+            rentedBikeGPSRef.removeEventListener(bikeGPSListener);
+            bikeGPSListener = null;
+            rentedBikeGPSRef = null;
+            Log.d("BikeRental", "GPS tracking stopped for bike: " + rentedBikeId);
+        }
         
         // Update bike status in Firestore back to available
         Map<String, Object> rentalEndUpdate = new HashMap<>();
@@ -2563,15 +2615,26 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
      * @param bikeId The rented bike's ID
      */
     private void listenToRentedBikeGPS(String bikeId) {
+        // Clean up existing listener first
+        if (bikeGPSListener != null && rentedBikeGPSRef != null) {
+            rentedBikeGPSRef.removeEventListener(bikeGPSListener);
+            Log.d("BikeRental", "Cleaned up previous GPS listener");
+        }
+        
         // Listen to gpsData/bike_xxx/latest/ - this is the bike's GPS module data
-        DatabaseReference rentedBikeRef = bikesRef.child(bikeId).child("latest");
+        rentedBikeGPSRef = bikesRef.child(bikeId).child("latest");
         
         Log.d("BikeRental", "Starting GPS tracking for bike: " + bikeId + " from Firebase GPS module");
+        Log.d("BikeRental", "Firebase path: gpsData/" + bikeId + "/latest");
         
-        rentedBikeRef.addValueEventListener(new com.google.firebase.database.ValueEventListener() {
+        bikeGPSListener = new com.google.firebase.database.ValueEventListener() {
             @Override
             public void onDataChange(@NonNull com.google.firebase.database.DataSnapshot snapshot) {
+                Log.d("BikeRental", "GPS data received for bike: " + bikeId);
+                
+                // Check if payment is completed and bike is still rented
                 if (!transactionAuthorized || !bikeId.equals(rentedBikeId)) {
+                    Log.d("BikeRental", "Rental ended or different bike, stopping GPS tracking");
                     return; // Rental ended or different bike
                 }
                 
@@ -2580,11 +2643,15 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 Object lngStr = snapshot.child("longitude").getValue();
                 String timestampStr = snapshot.child("timestamp").getValue(String.class);
 
+                Log.d("BikeRental", "Raw GPS data - lat: " + latStr + ", lng: " + lngStr + ", timestamp: " + timestampStr);
+
                 if (latStr != null && lngStr != null) {
                     try {
                         double lat = Double.parseDouble(latStr.toString());
                         double lng = Double.parseDouble(lngStr.toString());
                         LatLng newBikeLocation = new LatLng(lat, lng);
+
+                        Log.d("BikeRental", "Parsed GPS coordinates: " + newBikeLocation);
 
                         boolean inside = isWithinGeofence(newBikeLocation);
 
@@ -2605,47 +2672,59 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                                     results
                             );
                             if (results[0] < 1.0f) { // Only update if moved more than 1 meter
+                                Log.d("BikeRental", "Bike location change too small (" + results[0] + "m), skipping update");
                                 return;
                             }
                         }
 
                         rentedBikeLocation = newBikeLocation;
 
-                        // Update or create bike marker with enhanced smooth animation
-                        if (bikeMarker == null) {
-                            MarkerOptions markerOptions = new MarkerOptions()
-                                    .position(rentedBikeLocation)
-                                    .title("Your Bike")
-                                    .snippet("GPS: " + newBikeLocation.latitude + ", " + newBikeLocation.longitude)
-                                    .icon(createRentedBikeMarker()) // Use blue teardrop for rented bike
-                                    .anchor(0.5f, 1.0f);
-                            bikeMarker = mMap.addMarker(markerOptions);
+                        // Update marker on main UI thread
+                        runOnUiThread(() -> {
+                            // Update or create bike marker with enhanced smooth animation
+                            if (bikeMarker == null) {
+                                MarkerOptions markerOptions = new MarkerOptions()
+                                        .position(rentedBikeLocation)
+                                        .title("Your Bike")
+                                        .snippet("GPS: " + newBikeLocation.latitude + ", " + newBikeLocation.longitude)
+                                        .icon(createRentedBikeMarker()) // Use blue teardrop for rented bike
+                                        .anchor(0.5f, 1.0f);
+                                bikeMarker = mMap.addMarker(markerOptions);
+                                
+                                // Center camera on bike initially
+                                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(rentedBikeLocation, 16));
+                                
+                                Log.d("BikeRental", "Created new bike marker at: " + rentedBikeLocation);
+                            } else {
+                                // Smooth animation for bike movement from GPS module
+                                animateMarkerWithInterpolation(bikeMarker, rentedBikeLocation, false);
+                                Log.d("BikeRental", "Updated bike marker position to: " + rentedBikeLocation);
+                            }
                             
-                            // Center camera on bike initially
-                            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(rentedBikeLocation, 16));
-                        } else {
-                            // Smooth animation for bike movement from GPS module
-                            animateMarkerWithInterpolation(bikeMarker, rentedBikeLocation, false);
-                        }
+                            // Update marker visibility based on distance
+                            updateMarkerVisibility();
+                        });
                         
-                        Log.d("BikeRental", "Bike GPS location updated from Firebase: " + rentedBikeLocation);
-
-                        // Update marker visibility based on distance
-                        updateMarkerVisibility();
-
-                        Log.d("BikeRental", "Rented bike location updated: " + rentedBikeLocation +
+                        Log.d("BikeRental", "Bike GPS location updated from Firebase: " + rentedBikeLocation +
                               (timestampStr != null ? " (timestamp: " + timestampStr + ")" : ""));
                     } catch (NumberFormatException e) {
-                        Log.e("BikeRental", "Failed to parse bike coordinates", e);
+                        Log.e("BikeRental", "Failed to parse bike coordinates: lat=" + latStr + ", lng=" + lngStr, e);
                     }
+                } else {
+                    Log.w("BikeRental", "GPS data is null - lat: " + latStr + ", lng: " + lngStr);
                 }
             }
 
             @Override
             public void onCancelled(@NonNull com.google.firebase.database.DatabaseError error) {
                 Log.e("BikeRental", "Failed to get rented bike location: " + error.getMessage());
+                Log.e("BikeRental", "Error code: " + error.getCode() + ", details: " + error.getDetails());
             }
-        });
+        };
+        
+        // Add the listener
+        rentedBikeGPSRef.addValueEventListener(bikeGPSListener);
+        Log.d("BikeRental", "GPS listener added successfully");
     }
 
     private boolean isWithinGeofence(LatLng location) {

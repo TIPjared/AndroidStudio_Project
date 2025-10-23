@@ -25,10 +25,26 @@ public class RideTimeAlertActivity extends AppCompatActivity {
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
                 WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
-        // Play alert sound
-        mediaPlayer = MediaPlayer.create(this, R.raw.red_alert);
-        mediaPlayer.setLooping(true);
-        mediaPlayer.start();
+        // Play alert sound - use system alert sound
+        try {
+            mediaPlayer = MediaPlayer.create(this, android.R.raw.alarm_klaxon);
+            if (mediaPlayer != null) {
+                mediaPlayer.setLooping(true);
+                mediaPlayer.start();
+            }
+        } catch (Exception e) {
+            // Fallback to system notification sound
+            try {
+                mediaPlayer = MediaPlayer.create(this, android.R.raw.notification);
+                if (mediaPlayer != null) {
+                    mediaPlayer.setLooping(true);
+                    mediaPlayer.start();
+                }
+            } catch (Exception ex) {
+                // No sound if both fail
+                Log.e("RideTimeAlertActivity", "Could not play alert sound", ex);
+            }
+        }
 
         // Vibrate
         vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
