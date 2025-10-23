@@ -236,7 +236,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="Need more help? Our support team is here for you:\n\n• Email: support@sikad.com\n• Use the Contact Support Team option in the app\n• Check our FAQ section for quick answers\n• Report issues through the feedback system"
+                        android:text="Need more help? Our support team is here for you:\n\n• Email: agvclubhouse@antel.com.ph\n• Mobile: 0917-704-0323, 0917-708-0567\n• Office: Accounting 436-6026, Admin 436-6745\n• Use the Contact Support Team option in the app\n• Check our FAQ section for quick answers\n• Report issues through the feedback system"
                         android:textColor="#333333"
                         android:textSize="14sp" />
                 </LinearLayout>

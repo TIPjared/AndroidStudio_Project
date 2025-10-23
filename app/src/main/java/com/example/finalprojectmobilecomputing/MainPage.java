@@ -154,6 +154,10 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     private static final float PROXIMITY_THRESHOLD_METERS = 30f; // Distance to hide user marker
     private DatabaseReference bikesRef; // Reference to bikes in Firebase
     
+    // GPS tracking listener management
+    private com.google.firebase.database.ValueEventListener bikeGPSListener;
+    private DatabaseReference rentedBikeGPSRef;
+    
     // Enhanced real-time tracking variables
     private LatLng lastUserLocation = null; // Last known user location for interpolation
     private LatLng lastBikeLocation = null; // Last known bike location for interpolation
@@ -317,29 +321,54 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             if ("Stop Ride".equals(payButton.getText().toString())) {
                 stopRide();
             } else {
-                if (currentLocation != null && activeGeofencePoints != null && !activeGeofencePoints.isEmpty()) {
-
-                    boolean isInside = PolyUtil.containsLocation(
-                            new LatLng(currentLocation.latitude, currentLocation.longitude),
-                            activeGeofencePoints,
-                            true
-                    );
-
-                    if (isInside) {
-                        // ✅ Only allow access if inside geofence
+                if (currentLocation != null) {
+                    Log.d("MainPage", "Pay Now clicked - Current location: " + currentLocation);
+                    Log.d("MainPage", "Geofence boundary: " + (antelBoundary != null ? antelBoundary.size() + " points" : "null"));
+                    
+                    // Check if geofence is configured
+                    if (antelBoundary != null && !antelBoundary.isEmpty()) {
+                        // Geofence is configured - check if user is inside
+                        boolean isInside = PolyUtil.containsLocation(currentLocation, antelBoundary, true);
+                        Log.d("Geofence", "User location check - Inside: " + isInside);
+                        
+                        if (isInside) {
+                            Log.d("Geofence", "User is inside geofence, proceeding to ride duration");
+                            Toast.makeText(this, "Location verified! Proceeding to ride selection...", Toast.LENGTH_SHORT).show();
+                            // Navigate to ride duration selection page
+                            Intent intent = new Intent(MainPage.this, RideDurationActivity.class);
+                            startActivity(intent);
+                        } else {
+                            Log.d("Geofence", "User is outside geofence");
+                            Toast.makeText(this, "You must be inside the designated area to start a ride.", Toast.LENGTH_LONG).show();
+                        }
+                    } else {
+                        // No geofence configured - allow ride anywhere
+                        Log.d("Geofence", "No geofence configured, allowing ride anywhere");
+                        Toast.makeText(this, "Proceeding to ride selection...", Toast.LENGTH_SHORT).show();
+                        // Navigate to ride duration selection page
                         Intent intent = new Intent(MainPage.this, RideDurationActivity.class);
                         startActivity(intent);
-                    } else {
-                        // 🚫 Show warning if outside area
-                        Toast.makeText(this, "You must be inside Antel Grand Village to start a ride.", Toast.LENGTH_SHORT).show();
                     }
 
                 } else {
-                    // ⚠️ Location not yet available
+                    // Check if we have location permission
+                    if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) 
+                            != PackageManager.PERMISSION_GRANTED) {
+                        Toast.makeText(this, "Location permission required. Please enable location access.", Toast.LENGTH_LONG).show();
+                        requestLocationPermission();
+                        return;
+                    }
+                    
+                    // Try to create user marker if location is available but marker doesn't exist
                     if (currentLocation != null && userMarker == null) {
                         createUserMarker();
                     }
-                    Toast.makeText(this, "Waiting for current location data...", Toast.LENGTH_SHORT).show();
+                    
+                    // Show more helpful message and try to get location
+                    Toast.makeText(this, "Getting your location... Please wait.", Toast.LENGTH_SHORT).show();
+                    
+                    // Force location refresh with timeout
+                    forceLocationRefreshWithTimeout();
                 }
             }
         });
@@ -664,6 +693,16 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         builder.setPositiveButton("OK", (dialog, which) -> dialog.dismiss());
         builder.show();
     }
+    
+    /**
+     * Show ride duration dialog (alternative to direct navigation)
+     */
+    private void showRideDurationDialog() {
+        Log.d("MainPage", "Showing ride duration dialog");
+        // Navigate to ride duration selection page
+        Intent intent = new Intent(MainPage.this, RideDurationActivity.class);
+        startActivity(intent);
+    }
 
 
 
@@ -731,6 +770,9 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             timerTextView.setVisibility(View.VISIBLE);
 
             updateTransactionUI();  // updates buttons, visibility
+            
+            // Update marker visibility after payment success
+            updateMarkerVisibility();
         }
     }
 
@@ -1204,7 +1246,16 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     public void onMapReady(GoogleMap googleMap) {
 
         mMap = googleMap;
-        requestLocationPermission();
+        
+        // Check location permission first
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) 
+                == PackageManager.PERMISSION_GRANTED) {
+            // Permission already granted, enable location
+            enableMyLocation();
+        } else {
+            // Request permission
+            requestLocationPermission();
+        }
 
         // Draw Geofence
         loadActiveGeofenceFromFirestore();
@@ -1230,51 +1281,73 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 Log.d("MainPage", "Creating delayed user marker");
                 createUserMarker();
             }
+            // Update marker visibility after initial setup
+            updateMarkerVisibility();
         }, 2000); // 2 second delay
     }
 
     private void loadActiveGeofenceFromFirestore() {
         FirebaseFirestore db = FirebaseFirestore.getInstance();
 
+        Log.d("Geofence", "Loading geofences from Firebase...");
+        
         db.collection("geofence")
-                .whereEqualTo("is_active", true)
                 .get()
                 .addOnSuccessListener(queryDocumentSnapshots -> {
+                    Log.d("Geofence", "Found " + queryDocumentSnapshots.size() + " active geofences");
+                    
                     if (!queryDocumentSnapshots.isEmpty()) {
-                        DocumentSnapshot document = queryDocumentSnapshots.getDocuments().get(0);
-                        String name = document.getString("name");
-                        String colorCode = document.getString("color_code");
-                        List<Map<String, Object>> points = (List<Map<String, Object>>) document.get("points");
+                        // Process all geofences (regardless of active status)
+                        for (DocumentSnapshot document : queryDocumentSnapshots.getDocuments()) {
+                            String name = document.getString("name");
+                            String colorCode = document.getString("color_code");
+                            Boolean isActive = document.getBoolean("is_active");
+                            List<Map<String, Object>> points = (List<Map<String, Object>>) document.get("points");
 
-                        if (points != null && !points.isEmpty()) {
-                            activeGeofencePoints.clear();
-                            for (Map<String, Object> point : points) {
-                                GeoPoint geoPoint = (GeoPoint) point.get("location");
-                                if (geoPoint != null) {
-                                    LatLng latLng = new LatLng(geoPoint.getLatitude(), geoPoint.getLongitude());
-                                    activeGeofencePoints.add(latLng);
+                            Log.d("Geofence", "Processing geofence: " + name + " (active: " + isActive + ") with " + (points != null ? points.size() : 0) + " points");
+
+                            if (points != null && !points.isEmpty()) {
+                                List<LatLng> geofencePoints = new ArrayList<>();
+                                for (Map<String, Object> point : points) {
+                                    GeoPoint geoPoint = (GeoPoint) point.get("location");
+                                    if (geoPoint != null) {
+                                        LatLng latLng = new LatLng(geoPoint.getLatitude(), geoPoint.getLongitude());
+                                        geofencePoints.add(latLng);
+                                    }
+                                }
+
+                                if (!geofencePoints.isEmpty()) {
+                                    // Draw the geofence area on the map (show even if inactive)
+                                    String strokeColor = (colorCode != null && !colorCode.isEmpty()) ? colorCode : "#FF0000";
+                                    int alpha = (isActive != null && isActive) ? 80 : 40; // Less opaque if inactive
+                                    
+                                    mMap.addPolygon(new PolygonOptions()
+                                            .addAll(geofencePoints)
+                                            .strokeColor(Color.parseColor(strokeColor))
+                                            .fillColor(ColorUtils.setAlphaComponent(Color.parseColor(strokeColor), alpha))
+                                            .strokeWidth(3));
+
+                                    // Store for boundary checking (use the first geofence as the main boundary)
+                                    if (antelBoundary == null || antelBoundary.isEmpty()) {
+                                        antelBoundary = geofencePoints;
+                                        Log.d("Geofence", "Set antelBoundary with " + geofencePoints.size() + " points");
+                                    }
+
+                                    Log.d("Geofence", "✓ Geofence drawn: " + name + " (active: " + isActive + ") with " + geofencePoints.size() + " points");
                                 }
                             }
-
-                            // Draw the geofence area on the map
-                            mMap.addPolygon(new PolygonOptions()
-                                    .addAll(activeGeofencePoints)
-                                    .strokeColor(Color.parseColor(colorCode))
-                                    .fillColor(ColorUtils.setAlphaComponent(Color.parseColor(colorCode), 80)));
-
-                            // Add geofences dynamically
-                            for (LatLng latLng : activeGeofencePoints) {
-                                addGeofence(latLng.latitude, latLng.longitude);
-                            }
-
-                            Log.d("Geofence", "Active geofence loaded: " + name);
                         }
                     } else {
-                        Log.w("Geofence", "No active geofence found in Firestore.");
+                        Log.w("Geofence", "No active geofences found in Firebase");
+                        Toast.makeText(this, "No geofences configured. Contact admin.", Toast.LENGTH_LONG).show();
                     }
                 })
-                .addOnFailureListener(e -> Log.e("Geofence", "Error fetching geofence data", e));
+                .addOnFailureListener(e -> {
+                    Log.e("Geofence", "Error fetching geofence data", e);
+                    Toast.makeText(this, "Failed to load geofences. Check your connection.", Toast.LENGTH_LONG).show();
+                });
     }
+    
 
     private void addGeofence(double latitude, double longitude) {
         Geofence geofence = new Geofence.Builder()
@@ -1327,11 +1400,16 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 // Location permission granted - enable location services
+                Toast.makeText(this, "Location permission granted! Getting your location...", Toast.LENGTH_SHORT).show();
                 enableMyLocation();
                 Log.d("MainPage", "Location permission granted");
             } else {
-                Toast.makeText(this, "Location permission denied. Please enable location access to use the app.", Toast.LENGTH_LONG).show();
+                // Permission denied - show settings dialog
+                Toast.makeText(this, "Location permission denied. Please enable location access in Settings to use the app.", Toast.LENGTH_LONG).show();
                 Log.e("MainPage", "Location permission denied");
+                
+                // Show a dialog to guide user to settings
+                showLocationPermissionDialog();
             }
         } else if (requestCode == 101) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
@@ -1340,6 +1418,28 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 Toast.makeText(this, "Notification permission denied", Toast.LENGTH_SHORT).show();
             }
         }
+    }
+    
+    /**
+     * Show dialog to guide user to enable location permission
+     */
+    private void showLocationPermissionDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("Location Permission Required")
+                .setMessage("This app needs location access to show your position and nearby bikes. Please enable location permission in Settings.")
+                .setPositiveButton("Open Settings", (dialog, which) -> {
+                    // Open app settings
+                    Intent intent = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                    intent.setData(Uri.parse("package:" + getPackageName()));
+                    startActivity(intent);
+                })
+                .setNegativeButton("Cancel", (dialog, which) -> {
+                    Toast.makeText(this, "App will use approximate location", Toast.LENGTH_SHORT).show();
+                    // Use approximate location as fallback
+                    enableMyLocation();
+                })
+                .setCancelable(false)
+                .show();
     }
     private LatLng getPolygonCenter(List<LatLng> points) {
         double lat = 0, lng = 0;
@@ -1397,9 +1497,15 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED
         ) {
+            // Show a helpful message before requesting permission
+            Toast.makeText(this, "Location permission is required for bike tracking. Please allow location access.", Toast.LENGTH_LONG).show();
+            
             ActivityCompat.requestPermissions(
                     this,
-                    new String[]{ Manifest.permission.ACCESS_FINE_LOCATION },
+                    new String[]{ 
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                    },
                     LOCATION_PERMISSION_REQUEST_CODE
             );
         } else {
@@ -1414,10 +1520,10 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     @SuppressWarnings("deprecation")
     private void startLocationUpdates() {
         locationRequest = LocationRequest.create()
-                .setInterval(1000)  // Update every 1 second for smoother tracking
+                .setInterval(2000)  // Update every 2 seconds for dynamic tracking
                 .setFastestInterval(500)  // Fastest update every 0.5 seconds
                 .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
-                .setSmallestDisplacement(1.0f); // Update if moved at least 1 meter
+                .setSmallestDisplacement(2.0f); // Update if moved at least 2 meters
 
         locationCallback = new LocationCallback() {
             @Override
@@ -1428,7 +1534,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 if (loc == null) return;
 
                 // Filter out inaccurate locations to prevent marker jumping
-                if (loc.getAccuracy() > 100.0f) { // Only accept locations with accuracy better than 100 meters
+                if (loc.getAccuracy() > 100.0f) { // Accept locations with accuracy better than 100 meters
                     Log.d("MainPage", "Location accuracy too low: " + loc.getAccuracy() + "m, skipping update");
                     return;
                 }
@@ -1451,18 +1557,30 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 // Update current location
                 currentLocation = currentLatLng;
 
-                // Always update user marker position with enhanced smooth animation
-                if (userMarker != null) {
-                    animateMarkerWithInterpolation(userMarker, currentLatLng, true);
+                // During ride: Hide user marker completely, bike location comes from Firebase GPS
+                if (transactionAuthorized && rentedBikeId != null) {
+                    // Force hide user marker during ride - bike location comes from Firebase GPS module
+                    if (userMarker != null) {
+                        userMarker.setVisible(false);
+                        Log.d("BikeRental", "User marker (mouse icon) FORCE HIDDEN during ride");
+                    }
+                    Log.d("BikeRental", "User marker (mouse icon) hidden during ride - bike location from Firebase GPS");
                 } else {
-                    createUserMarkerWithAntiStuck();
+                    // Before ride: Update user marker position
+                    if (userMarker != null) {
+                        animateMarkerWithInterpolation(userMarker, currentLatLng, true);
+                    } else {
+                        createUserMarkerWithAntiStuck();
+                    }
                 }
-
+                
                 Log.d("MainPage", "Location updated: " + currentLatLng + " (accuracy: " + loc.getAccuracy() + "m), userMarker exists: " + (userMarker != null));
 
-                // Update marker visibility based on proximity to rented bike
+                // Update marker visibility based on ride status
                 if (transactionAuthorized && rentedBikeId != null) {
                     updateMarkerVisibility();
+                    // Force hide user marker as backup
+                    forceHideUserMarkerDuringRide();
                 }
 
                 // Update ride path if ride is active
@@ -1493,46 +1611,150 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.ACCESS_FINE_LOCATION
-        ) != PackageManager.PERMISSION_GRANTED
-        ) return;
+        ) != PackageManager.PERMISSION_GRANTED) {
+            // Try with coarse location if fine location is not available
+            if (ActivityCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED) {
+                Log.w("MainPage", "No location permissions available");
+                return;
+            }
+        }
 
         // Enable the built-in location layer first
         mMap.setMyLocationEnabled(true);
         
+        // Show loading message
+        Toast.makeText(this, "Getting your location...", Toast.LENGTH_SHORT).show();
+        
+        // Try to get current location with multiple attempts
+        getCurrentLocationWithRetry(0);
+        
+        // Start continuous location updates immediately
+        startLocationUpdates();
+    }
+    
+    /**
+     * Get current location with retry mechanism
+     */
+    private void getCurrentLocationWithRetry(int attempt) {
+        if (attempt >= 3) {
+            Log.w("MainPage", "Max location attempts reached, using fallback");
+            useFallbackLocation();
+            return;
+        }
+        
         fusedLocationClient.getLastLocation()
                 .addOnSuccessListener(loc -> {
-                    if (loc != null) {
+                    if (loc != null && loc.getAccuracy() < 500.0f) { // Accept locations with accuracy better than 500 meters
                         currentLocation = new LatLng(loc.getLatitude(), loc.getLongitude());
-                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
+                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 16));
                         
                         // Create user marker immediately when location is available
                         createUserMarker();
                         
-                        // Start continuous location updates
-                        startLocationUpdates();
-                        
-                        Log.d("MainPage", "Location obtained: " + currentLocation);
+                        Toast.makeText(this, "Location found! Accuracy: " + String.format("%.0f", loc.getAccuracy()) + "m", Toast.LENGTH_SHORT).show();
+                        Log.d("MainPage", "Location obtained: " + currentLocation + " (accuracy: " + loc.getAccuracy() + "m)");
                     } else {
-                        // If last location is null, start location updates anyway
-                        Log.w("MainPage", "Last location is null, starting location updates");
-                        startLocationUpdates();
-                        
-                        // Show a default location (Manila area) as fallback
-                        currentLocation = new LatLng(14.5995, 120.9842); // Manila coordinates
-                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
-                        createUserMarker();
+                        // Try again after a short delay
+                        Log.w("MainPage", "Location attempt " + (attempt + 1) + " failed or inaccurate, retrying...");
+                        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                            getCurrentLocationWithRetry(attempt + 1);
+                        }, 2000); // 2 second delay
                     }
                 })
                 .addOnFailureListener(e -> {
-                    Log.e("MainPage", "Failed to get location", e);
-                    // Start location updates anyway as a fallback
-                    startLocationUpdates();
-                    
-                    // Show a default location (Manila area) as fallback
-                    currentLocation = new LatLng(14.5995, 120.9842); // Manila coordinates
-                    mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
-                    createUserMarker();
+                    Log.e("MainPage", "Location attempt " + (attempt + 1) + " failed: " + e.getMessage());
+                    // Try again after a short delay
+                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                        getCurrentLocationWithRetry(attempt + 1);
+                    }, 2000); // 2 second delay
                 });
+    }
+    
+    /**
+     * Use fallback location when GPS is not available
+     */
+    private void useFallbackLocation() {
+        // Show a default location (Pasig City area) as fallback
+        currentLocation = new LatLng(14.5764, 121.0851); // Pasig City coordinates
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
+        createUserMarker();
+        
+        Toast.makeText(this, "Using approximate location. Enable GPS for better accuracy.", Toast.LENGTH_LONG).show();
+        Log.w("MainPage", "Using fallback location: " + currentLocation);
+    }
+    
+    /**
+     * Force location refresh for better accuracy
+     */
+    private void forceLocationRefresh() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) 
+                == PackageManager.PERMISSION_GRANTED) {
+            fusedLocationClient.getLastLocation()
+                    .addOnSuccessListener(loc -> {
+                        if (loc != null && loc.getAccuracy() < 200.0f) {
+                            LatLng newLocation = new LatLng(loc.getLatitude(), loc.getLongitude());
+                            if (currentLocation == null || !newLocation.equals(currentLocation)) {
+                                currentLocation = newLocation;
+                                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
+                                
+                                if (userMarker != null) {
+                                    userMarker.remove();
+                                }
+                                createUserMarker();
+                                
+                                Log.d("MainPage", "Location refreshed: " + currentLocation + " (accuracy: " + loc.getAccuracy() + "m)");
+                            }
+                        }
+                    });
+        }
+    }
+    
+    /**
+     * Force location refresh with timeout to prevent infinite waiting
+     */
+    private void forceLocationRefreshWithTimeout() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) 
+                == PackageManager.PERMISSION_GRANTED) {
+            
+            // Set a timeout to prevent infinite waiting
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                if (currentLocation == null) {
+                    Log.w("MainPage", "Location timeout reached, using fallback");
+                    useFallbackLocation();
+                }
+            }, 10000); // 10 second timeout
+            
+            fusedLocationClient.getLastLocation()
+                    .addOnSuccessListener(loc -> {
+                        if (loc != null && loc.getAccuracy() < 500.0f) { // More lenient accuracy
+                            LatLng newLocation = new LatLng(loc.getLatitude(), loc.getLongitude());
+                            currentLocation = newLocation;
+                            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
+                            
+                            if (userMarker != null) {
+                                userMarker.remove();
+                            }
+                            createUserMarker();
+                            
+                            Toast.makeText(this, "Location found! You can now proceed.", Toast.LENGTH_SHORT).show();
+                            Log.d("MainPage", "Location refreshed: " + currentLocation + " (accuracy: " + loc.getAccuracy() + "m)");
+                        } else {
+                            Log.w("MainPage", "Location accuracy too low: " + (loc != null ? loc.getAccuracy() : "null"));
+                            // Try again after a short delay
+                            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                                forceLocationRefreshWithTimeout();
+                            }, 2000);
+                        }
+                    })
+                    .addOnFailureListener(e -> {
+                        Log.e("MainPage", "Location refresh failed: " + e.getMessage());
+                        // Use fallback location
+                        useFallbackLocation();
+                    });
+        }
     }
     
     /**
@@ -1737,11 +1959,12 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     }
     
     /**
-     * Create rented bike marker (white circle with bike design)
+     * Create rented bike marker (BLUE teardrop for rented bikes)
      */
     private BitmapDescriptor createRentedBikeMarker() {
-        int markerSize = 100;
-        Bitmap markerBitmap = Bitmap.createBitmap(markerSize, markerSize, Bitmap.Config.ARGB_8888);
+        int markerSize = 120;
+        int tailHeight = 30;
+        Bitmap markerBitmap = Bitmap.createBitmap(markerSize, markerSize + tailHeight, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(markerBitmap);
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
@@ -1749,24 +1972,32 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         float centerY = markerSize / 2f;
         float radius = markerSize / 2f;
 
-        // Draw white circle background
+        // Create teardrop path
+        Path teardropPath = new Path();
+        teardropPath.addCircle(centerX, centerY, radius, Path.Direction.CW);
+        teardropPath.moveTo(centerX - 12, centerY + radius - 8);
+        teardropPath.lineTo(centerX, markerSize + tailHeight);
+        teardropPath.lineTo(centerX + 12, centerY + radius - 8);
+        teardropPath.close();
+
+        // Draw BLUE teardrop for rented bikes (darker blue for distinction)
+        paint.setColor(Color.parseColor("#1976D2")); // Material Blue 700
+        paint.setStyle(Paint.Style.FILL);
+        canvas.drawPath(teardropPath, paint);
+
+        // Draw white border for better visibility
+        paint.setColor(Color.WHITE);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(4);
+        canvas.drawPath(teardropPath, paint);
+
+        // Draw bike icon inside the blue teardrop
         paint.setColor(Color.WHITE);
         paint.setStyle(Paint.Style.FILL);
-        canvas.drawCircle(centerX, centerY, radius, paint);
-
-        // Draw black border
-        paint.setColor(Color.BLACK);
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(3);
-        canvas.drawCircle(centerX, centerY, radius - 2, paint);
-
-        // Draw bike icon in the center
-        paint.setColor(Color.BLACK);
-        paint.setStyle(Paint.Style.FILL);
-        paint.setTextSize(radius * 0.6f);
+        paint.setTextSize(radius * 0.7f);
         paint.setTextAlign(Paint.Align.CENTER);
         
-        // Draw bike icon (simple bike symbol)
+        // Draw bike icon (bicycle emoji)
         canvas.drawText("🚲", centerX, centerY + radius * 0.2f, paint);
 
         return BitmapDescriptorFactory.fromBitmap(markerBitmap);
@@ -2101,10 +2332,48 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             }
         }
         
+        // Clean up bike status listener
         if (bikeListener != null && bikeStatusRef != null) {
             bikeStatusRef.removeEventListener(bikeListener);
             bikeListener = null;
             bikeStatusRef = null;
+            Log.d("MainPage", "Bike status listener cleaned up");
+        }
+        
+        // Clean up bike GPS listener
+        if (bikeGPSListener != null && rentedBikeGPSRef != null) {
+            rentedBikeGPSRef.removeEventListener(bikeGPSListener);
+            bikeGPSListener = null;
+            rentedBikeGPSRef = null;
+            Log.d("MainPage", "Bike GPS listener cleaned up");
+        }
+        
+        // Clean up interpolation handler
+        if (interpolationHandler != null) {
+            interpolationHandler.removeCallbacksAndMessages(null);
+            Log.d("MainPage", "Interpolation handler cleaned up");
+        }
+    }
+    
+    @Override
+    protected void onPause() {
+        super.onPause();
+        
+        // Pause GPS tracking when app goes to background
+        if (bikeGPSListener != null && rentedBikeGPSRef != null) {
+            rentedBikeGPSRef.removeEventListener(bikeGPSListener);
+            Log.d("MainPage", "GPS tracking paused in onPause()");
+        }
+    }
+    
+    @Override
+    protected void onResume() {
+        super.onResume();
+        
+        // Resume GPS tracking if bike is rented
+        if (transactionAuthorized && rentedBikeId != null) {
+            listenToRentedBikeGPS(rentedBikeId);
+            Log.d("MainPage", "GPS tracking resumed in onResume()");
         }
     }
 
@@ -2131,113 +2400,77 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         
         Log.d("BikeRental", "Loading all bikes from Firebase (gpsData + Firestore bikes)");
         
-        // Listen to GPS data from Realtime Database
-        bikesRef.addValueEventListener(new com.google.firebase.database.ValueEventListener() {
-            @Override
-            public void onDataChange(@NonNull com.google.firebase.database.DataSnapshot snapshot) {
-                // Only load bikes if no active rental
-                if (rentedBikeId != null) {
-                    Log.d("BikeRental", "Active rental exists, skipping bike load");
-                    return;
-                }
-                
-                // Clear existing bike markers
-                for (Marker marker : allBikeMarkers.values()) {
-                    marker.remove();
-                }
-                allBikeMarkers.clear();
-                
-                // Add marker for each bike in gpsData
-                for (com.google.firebase.database.DataSnapshot bikeSnapshot : snapshot.getChildren()) {
-                    String bikeId = bikeSnapshot.getKey();
+        // Load bikes from Firestore directly (since GPS data is in Firestore)
+        firestore.collection("bikes")
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    // Only load bikes if no active rental
+                    if (rentedBikeId != null) {
+                        Log.d("BikeRental", "Active rental exists, skipping bike load");
+                        return;
+                    }
                     
-                    // Get bike location from gpsData/bike_xxx/latest/
-                    com.google.firebase.database.DataSnapshot latestSnapshot = bikeSnapshot.child("latest");
+                    // Clear existing bike markers
+                    for (Marker marker : allBikeMarkers.values()) {
+                        marker.remove();
+                    }
+                    allBikeMarkers.clear();
                     
-                    // Parse latitude and longitude as strings
-                    Object latObj = latestSnapshot.child("latitude").getValue();
-                    Object lngObj = latestSnapshot.child("longitude").getValue();
-
-                    if (latObj != null && lngObj != null && bikeId != null) {
-                        try {
-                            double lat = Double.parseDouble(latObj.toString());
-                            double lng = Double.parseDouble(lngObj.toString());
-                            LatLng bikeLocation = new LatLng(lat, lng);
+                    Log.d("BikeRental", "Loading bikes from Firestore - found " + queryDocumentSnapshots.size() + " bikes");
+                    
+                    // Process each bike document
+                    for (DocumentSnapshot document : queryDocumentSnapshots.getDocuments()) {
+                        String bikeId = document.getId();
+                        GeoPoint location = document.getGeoPoint("current_location");
+                        String status = document.getString("status");
+                        String rentedBy = document.getString("rentedBy");
+                        Boolean isActive = document.getBoolean("isActive");
+                        
+                        if (location != null) {
+                            LatLng bikeLocation = new LatLng(location.getLatitude(), location.getLongitude());
                             
-                            // Get bike status from Firestore bikes collection
-                            final String finalBikeId = bikeId;
-                            firestore.collection("bikes").document(bikeId)
-                                    .get()
-                                    .addOnSuccessListener(document -> {
-                                        boolean isAvailable = true;
-                                        boolean isActive = false;
-                                        
-                                        if (document.exists()) {
-                                            String status = document.getString("status");
-                                            Boolean active = document.getBoolean("isActive");
-                                            String rentedBy = document.getString("rentedBy");
-                                            
-                                            // Bike is available if: status is "available" AND not currently rented
-                                            isAvailable = "available".equals(status) && (rentedBy == null || rentedBy.isEmpty());
-                                            isActive = active != null && active;
-                                            
-                                            Log.d("BikeRental", "Bike " + finalBikeId + " - status: " + status + 
-                                                  ", isActive: " + isActive + ", rentedBy: " + rentedBy + ", available: " + isAvailable);
-                                        } else {
-                                            Log.w("BikeRental", "Bike document not found in Firestore: " + finalBikeId);
-                                        }
-                                        
-                                        // Create bike marker with appropriate design
-                                        BitmapDescriptor markerIcon;
-                                        if (isAvailable) {
-                                            // Green teardrop for available bikes
-                                            markerIcon = createAvailableBikeMarker();
-                                        } else {
-                                            // White circle with bike design for rented bikes
-                                            markerIcon = createRentedBikeMarker();
-                                        }
-                                        
-                                        MarkerOptions markerOptions = new MarkerOptions()
-                                                .position(bikeLocation)
-                                                .title("Bike " + finalBikeId)
-                                                .snippet(isAvailable ? "Available" : "Rented")
-                                                .icon(markerIcon)
-                                                .anchor(0.5f, 1.0f);
-                                        
-                                        Marker marker = mMap.addMarker(markerOptions);
-                                        allBikeMarkers.put(finalBikeId, marker);
-                                        
-                                        Log.d("BikeRental", "✓ Added " + (isAvailable ? "available" : "rented") + 
-                                              " bike marker: " + finalBikeId + " at " + bikeLocation);
-                                    })
-                                    .addOnFailureListener(e -> {
-                                        Log.e("BikeRental", "Failed to get bike status for: " + finalBikeId, e);
-                                        // Still add marker as unknown status (blue)
-                                        MarkerOptions markerOptions = new MarkerOptions()
-                                                .position(bikeLocation)
-                                                .title("Bike " + finalBikeId)
-                                                .snippet("Status unknown")
-                                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))
-                                                .anchor(0.5f, 1.0f);
-                                        
-                                        Marker marker = mMap.addMarker(markerOptions);
-                                        allBikeMarkers.put(finalBikeId, marker);
-                                    });
+                            // Determine if bike is available
+                            boolean isAvailable = "available".equals(status) && (rentedBy == null || rentedBy.isEmpty());
                             
-                        } catch (NumberFormatException e) {
-                            Log.e("BikeRental", "Failed to parse coordinates for bike: " + bikeId, e);
+                            Log.d("BikeRental", "Bike " + bikeId + " - status: " + status + 
+                                  ", isActive: " + isActive + ", rentedBy: " + rentedBy + ", available: " + isAvailable);
+                            
+                            // Create bike marker with appropriate design
+                            BitmapDescriptor markerIcon;
+                            if (isAvailable) {
+                                // Green teardrop for available bikes
+                                markerIcon = createAvailableBikeMarker();
+                            } else {
+                                // Blue teardrop for rented bikes
+                                markerIcon = createRentedBikeMarker();
+                            }
+                            
+                            MarkerOptions markerOptions = new MarkerOptions()
+                                    .position(bikeLocation)
+                                    .title("Bike " + bikeId)
+                                    .snippet(isAvailable ? "Available" : "Rented")
+                                    .icon(markerIcon)
+                                    .anchor(0.5f, 1.0f);
+                            
+                            Marker marker = mMap.addMarker(markerOptions);
+                            allBikeMarkers.put(bikeId, marker);
+                            
+                            Log.d("BikeRental", "✓ Added " + (isAvailable ? "available" : "rented") + 
+                                  " bike marker: " + bikeId + " at " + bikeLocation);
+                        } else {
+                            Log.w("BikeRental", "Bike " + bikeId + " has no location data");
                         }
                     }
-                }
-                
-                Log.d("BikeRental", "Bikes loading completed from gpsData");
-            }
-            
-            @Override
-            public void onCancelled(@NonNull com.google.firebase.database.DatabaseError error) {
-                Log.e("BikeRental", "Failed to load bikes from gpsData: " + error.getMessage());
-            }
-        });
+                    
+                    // Update marker visibility after loading all bikes
+                    updateMarkerVisibility();
+                    
+                    Log.d("BikeRental", "Loaded " + allBikeMarkers.size() + " bike markers from Firestore");
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("BikeRental", "Failed to load bikes from Firestore", e);
+                    Toast.makeText(MainPage.this, "Failed to load bikes. Check your connection.", Toast.LENGTH_SHORT).show();
+                });
     }
     
     /**
@@ -2247,6 +2480,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     private void startRental(String bikeId) {
         rentedBikeId = bikeId;
         Log.d("BikeRental", "Starting rental for bike: " + bikeId);
+        Log.d("BikeRental", "Payment completed - starting GPS tracking for bike: " + bikeId);
         
         // Update bike status in Firestore
         Map<String, Object> rentalUpdate = new HashMap<>();
@@ -2263,13 +2497,28 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                     Log.e("BikeRental", "Failed to update bike status in Firestore", e);
                 });
         
-        // Hide all bike markers
-        hideAllBikeMarkers();
+        // Remove all existing bike markers completely to prevent duplicates
+        removeAllBikeMarkers();
         
-        // Listen to rented bike GPS updates
+        // Start GPS tracking for the rented bike (this is the key fix!)
+        Log.d("BikeRental", "Starting GPS tracking for rented bike: " + bikeId);
         listenToRentedBikeGPS(bikeId);
         
-        Toast.makeText(this, "Rental started for bike " + bikeId, Toast.LENGTH_SHORT).show();
+        // Hide user marker immediately when ride starts
+        if (userMarker != null) {
+            userMarker.setVisible(false);
+            Log.d("BikeRental", "User marker (mouse icon) hidden immediately when ride starts");
+        }
+        
+        // Force hide user marker and show only bike
+        if (userMarker != null) {
+            userMarker.setVisible(false);
+        }
+        
+        // Update marker visibility to show only bike
+        updateMarkerVisibility();
+        
+        Toast.makeText(this, "Rental started for bike " + bikeId + " - GPS tracking active", Toast.LENGTH_SHORT).show();
     }
     
     /**
@@ -2282,6 +2531,14 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         }
         
         Log.d("BikeRental", "Ending rental for bike: " + rentedBikeId);
+        
+        // Stop GPS tracking for the rented bike
+        if (bikeGPSListener != null && rentedBikeGPSRef != null) {
+            rentedBikeGPSRef.removeEventListener(bikeGPSListener);
+            bikeGPSListener = null;
+            rentedBikeGPSRef = null;
+            Log.d("BikeRental", "GPS tracking stopped for bike: " + rentedBikeId);
+        }
         
         // Update bike status in Firestore back to available
         Map<String, Object> rentalEndUpdate = new HashMap<>();
@@ -2299,17 +2556,25 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                     Log.e("BikeRental", "Failed to update bike status in Firestore", e);
                 });
         
-        // Remove rented bike marker
+        // Remove rented bike marker - it will be recreated as green available bike
         if (bikeMarker != null) {
             bikeMarker.remove();
             bikeMarker = null;
         }
         
-        // Remove user marker
+        // Restore user marker visibility after rental ends
         if (userMarker != null) {
-            userMarker.remove();
-            userMarker = null;
+            userMarker.setVisible(true);
+            // Update user marker position to current location
+            animateMarkerWithInterpolation(userMarker, currentLocation, true);
+            Log.d("BikeRental", "User marker (mouse icon) restored after ride ends");
+        } else if (currentLocation != null) {
+            // Create user marker if it doesn't exist
+            createUserMarkerWithAntiStuck();
+            Log.d("BikeRental", "User marker (mouse icon) created after ride ends");
         }
+        
+        Log.d("BikeRental", "Rental ended - user marker restored, bike will turn green");
         
         rentedBikeId = null;
         rentedBikeLocation = null;
@@ -2317,11 +2582,25 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         // Show all bikes again
         loadAllBikes();
         
+        // Update marker visibility to show all bikes and user
+        updateMarkerVisibility();
+        
         Toast.makeText(this, "Rental ended. All bikes visible again.", Toast.LENGTH_SHORT).show();
     }
     
     /**
-     * Hide all bike markers during rental
+     * Remove all bike markers completely to prevent duplicates
+     */
+    private void removeAllBikeMarkers() {
+        for (Marker marker : allBikeMarkers.values()) {
+            marker.remove();
+        }
+        allBikeMarkers.clear();
+        Log.d("BikeRental", "Removed " + allBikeMarkers.size() + " bike markers");
+    }
+    
+    /**
+     * Hide all bike markers during rental (legacy method for compatibility)
      */
     private void hideAllBikeMarkers() {
         for (Marker marker : allBikeMarkers.values()) {
@@ -2332,16 +2611,30 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     
     /**
      * Listen to rented bike's GPS location from Firebase with enhanced real-time tracking
+     * This uses the bike's actual GPS module data, not the user's location
      * @param bikeId The rented bike's ID
      */
     private void listenToRentedBikeGPS(String bikeId) {
-        // Listen to gpsData/bike_xxx/latest/
-        DatabaseReference rentedBikeRef = bikesRef.child(bikeId).child("latest");
+        // Clean up existing listener first
+        if (bikeGPSListener != null && rentedBikeGPSRef != null) {
+            rentedBikeGPSRef.removeEventListener(bikeGPSListener);
+            Log.d("BikeRental", "Cleaned up previous GPS listener");
+        }
         
-        rentedBikeRef.addValueEventListener(new com.google.firebase.database.ValueEventListener() {
+        // Listen to gpsData/bike_xxx/latest/ - this is the bike's GPS module data
+        rentedBikeGPSRef = bikesRef.child(bikeId).child("latest");
+        
+        Log.d("BikeRental", "Starting GPS tracking for bike: " + bikeId + " from Firebase GPS module");
+        Log.d("BikeRental", "Firebase path: gpsData/" + bikeId + "/latest");
+        
+        bikeGPSListener = new com.google.firebase.database.ValueEventListener() {
             @Override
             public void onDataChange(@NonNull com.google.firebase.database.DataSnapshot snapshot) {
+                Log.d("BikeRental", "GPS data received for bike: " + bikeId);
+                
+                // Check if payment is completed and bike is still rented
                 if (!transactionAuthorized || !bikeId.equals(rentedBikeId)) {
+                    Log.d("BikeRental", "Rental ended or different bike, stopping GPS tracking");
                     return; // Rental ended or different bike
                 }
                 
@@ -2350,11 +2643,15 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 Object lngStr = snapshot.child("longitude").getValue();
                 String timestampStr = snapshot.child("timestamp").getValue(String.class);
 
+                Log.d("BikeRental", "Raw GPS data - lat: " + latStr + ", lng: " + lngStr + ", timestamp: " + timestampStr);
+
                 if (latStr != null && lngStr != null) {
                     try {
                         double lat = Double.parseDouble(latStr.toString());
                         double lng = Double.parseDouble(lngStr.toString());
                         LatLng newBikeLocation = new LatLng(lat, lng);
+
+                        Log.d("BikeRental", "Parsed GPS coordinates: " + newBikeLocation);
 
                         boolean inside = isWithinGeofence(newBikeLocation);
 
@@ -2375,40 +2672,59 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                                     results
                             );
                             if (results[0] < 1.0f) { // Only update if moved more than 1 meter
+                                Log.d("BikeRental", "Bike location change too small (" + results[0] + "m), skipping update");
                                 return;
                             }
                         }
 
                         rentedBikeLocation = newBikeLocation;
 
-                        // Update or create bike marker with enhanced smooth animation
-                        if (bikeMarker == null) {
-                            MarkerOptions markerOptions = new MarkerOptions()
-                                    .position(rentedBikeLocation)
-                                    .title("Your Bike")
-                                    .icon(createAvailableBikeMarker()) // Use green teardrop for rented bike
-                                    .anchor(0.5f, 1.0f);
-                            bikeMarker = mMap.addMarker(markerOptions);
-                        } else {
-                            animateMarkerWithInterpolation(bikeMarker, rentedBikeLocation, false);
-                        }
-
-                        // Update marker visibility based on distance
-                        updateMarkerVisibility();
-
-                        Log.d("BikeRental", "Rented bike location updated: " + rentedBikeLocation +
+                        // Update marker on main UI thread
+                        runOnUiThread(() -> {
+                            // Update or create bike marker with enhanced smooth animation
+                            if (bikeMarker == null) {
+                                MarkerOptions markerOptions = new MarkerOptions()
+                                        .position(rentedBikeLocation)
+                                        .title("Your Bike")
+                                        .snippet("GPS: " + newBikeLocation.latitude + ", " + newBikeLocation.longitude)
+                                        .icon(createRentedBikeMarker()) // Use blue teardrop for rented bike
+                                        .anchor(0.5f, 1.0f);
+                                bikeMarker = mMap.addMarker(markerOptions);
+                                
+                                // Center camera on bike initially
+                                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(rentedBikeLocation, 16));
+                                
+                                Log.d("BikeRental", "Created new bike marker at: " + rentedBikeLocation);
+                            } else {
+                                // Smooth animation for bike movement from GPS module
+                                animateMarkerWithInterpolation(bikeMarker, rentedBikeLocation, false);
+                                Log.d("BikeRental", "Updated bike marker position to: " + rentedBikeLocation);
+                            }
+                            
+                            // Update marker visibility based on distance
+                            updateMarkerVisibility();
+                        });
+                        
+                        Log.d("BikeRental", "Bike GPS location updated from Firebase: " + rentedBikeLocation +
                               (timestampStr != null ? " (timestamp: " + timestampStr + ")" : ""));
                     } catch (NumberFormatException e) {
-                        Log.e("BikeRental", "Failed to parse bike coordinates", e);
+                        Log.e("BikeRental", "Failed to parse bike coordinates: lat=" + latStr + ", lng=" + lngStr, e);
                     }
+                } else {
+                    Log.w("BikeRental", "GPS data is null - lat: " + latStr + ", lng: " + lngStr);
                 }
             }
 
             @Override
             public void onCancelled(@NonNull com.google.firebase.database.DatabaseError error) {
                 Log.e("BikeRental", "Failed to get rented bike location: " + error.getMessage());
+                Log.e("BikeRental", "Error code: " + error.getCode() + ", details: " + error.getDetails());
             }
-        });
+        };
+        
+        // Add the listener
+        rentedBikeGPSRef.addValueEventListener(bikeGPSListener);
+        Log.d("BikeRental", "GPS listener added successfully");
     }
 
     private boolean isWithinGeofence(LatLng location) {
@@ -2429,50 +2745,101 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     }
 
     /**
-     * Calculate distance between user and rented bike
-     * Show/hide user marker based on proximity
+     * Dynamic marker visibility based on payment/ride status
+     * BEFORE PAYMENT: Show all bikes and user
+     * AFTER PAYMENT: Show only rented bike and user (hide other bikes)
+     * DURING RIDE: Show ONLY bike pin, hide user pin and all other bikes
      */
     private void updateMarkerVisibility() {
-        if (currentLocation == null || rentedBikeLocation == null || !transactionAuthorized) {
+        Log.d("BikeRental", "updateMarkerVisibility called - transactionAuthorized: " + transactionAuthorized + ", rentedBikeId: " + rentedBikeId);
+        
+        if (!transactionAuthorized) {
+            // BEFORE PAYMENT: Show all bikes and user
+            showAllBikesAndUser();
             return;
         }
         
-        // Calculate distance between user and bike
-        float[] results = new float[1];
-        Location.distanceBetween(
-                currentLocation.latitude, currentLocation.longitude,
-                rentedBikeLocation.latitude, rentedBikeLocation.longitude,
-                results
-        );
-        float distanceMeters = results[0];
+        if (rentedBikeId == null || rentedBikeLocation == null) {
+            // Payment authorized but no rented bike yet
+            showAllBikesAndUser();
+            return;
+        }
         
-        Log.d("BikeRental", "Distance between user and bike: " + distanceMeters + "m");
+        // DURING RIDE: Hide user marker and all other bikes, show ONLY rented bike
+        if (userMarker != null) {
+            userMarker.setVisible(false);
+            Log.d("BikeRental", "User marker (mouse icon) hidden during ride");
+        }
         
-        // If user is close to bike (< 30 meters), hide user marker
-        if (distanceMeters < PROXIMITY_THRESHOLD_METERS) {
-            // Hide user marker, show only bike
+        // Hide all other bike markers
+        for (Map.Entry<String, Marker> entry : allBikeMarkers.entrySet()) {
+            String bikeId = entry.getKey();
+            Marker marker = entry.getValue();
+            
+            if (!bikeId.equals(rentedBikeId)) {
+                marker.setVisible(false);
+            }
+        }
+        
+        // Show only the rented bike marker (bike pin with bike icon)
+        if (bikeMarker != null) {
+            bikeMarker.setVisible(true);
+            Log.d("BikeRental", "Only rented bike marker (bike pin) visible during ride");
+        } else {
+            Log.w("BikeRental", "Bike marker is null during ride - this should not happen!");
+        }
+        
+        Log.d("BikeRental", "During ride - user pin (mouse) hidden, other bikes hidden, only bike pin visible");
+    }
+    
+    /**
+     * Force hide user marker during ride - emergency method
+     */
+    private void forceHideUserMarkerDuringRide() {
+        if (transactionAuthorized && rentedBikeId != null) {
             if (userMarker != null) {
                 userMarker.setVisible(false);
+                Log.d("BikeRental", "User marker FORCE HIDDEN during ride");
             }
-            if (bikeMarker != null) {
-                bikeMarker.setVisible(true);
-            }
-            Log.d("BikeRental", "User close to bike - hiding user marker");
-        } else {
-            // User is far from bike, show both markers
-            if (userMarker == null) {
-                // Create user marker if it doesn't exist
-                createUserMarkerWithAntiStuck();
-            } else {
-                userMarker.setVisible(true);
-                animateMarkerWithInterpolation(userMarker, currentLocation, true);
-            }
-            
-            if (bikeMarker != null) {
-                bikeMarker.setVisible(true);
-            }
-            Log.d("BikeRental", "User far from bike - showing both markers");
         }
+    }
+    
+    /**
+     * Show all bikes and user (BEFORE PAYMENT state)
+     */
+    private void showAllBikesAndUser() {
+        // Show all bike markers
+        Log.d("BikeRental", "showAllBikesAndUser called - total bike markers: " + allBikeMarkers.size());
+        for (Marker marker : allBikeMarkers.values()) {
+            marker.setVisible(true);
+            Log.d("BikeRental", "Made bike marker visible");
+        }
+        
+        // Show user marker
+        if (userMarker == null && currentLocation != null) {
+            createUserMarkerWithAntiStuck();
+        } else if (userMarker != null) {
+            userMarker.setVisible(true);
+        }
+        
+        Log.d("BikeRental", "Showing all bikes and user (before payment) - " + allBikeMarkers.size() + " bikes visible");
+    }
+    
+    /**
+     * Hide all other bikes except rented bike (AFTER PAYMENT state)
+     */
+    private void hideAllOtherBikes() {
+        // Hide all bike markers except the rented one
+        for (Map.Entry<String, Marker> entry : allBikeMarkers.entrySet()) {
+            String bikeId = entry.getKey();
+            Marker marker = entry.getValue();
+            
+            if (!bikeId.equals(rentedBikeId)) {
+                marker.setVisible(false);
+            }
+        }
+        
+        Log.d("BikeRental", "Hidden all other bikes, showing only rented bike: " + rentedBikeId);
     }
 }
 

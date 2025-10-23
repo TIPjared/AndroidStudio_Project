@@ -261,7 +261,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="A: You can contact our support team through the 'Contact Support Team' option in the Support tab, or email us at support@sikad.com"
+                        android:text="A: You can contact our support team through the 'Contact Support Team' option in the Support tab, or email us at agvclubhouse@antel.com.ph"
                         android:textColor="#333333"
                         android:textSize="14sp" />
                 </LinearLayout>
@@ -281,7 +281,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Contact our support team at support@sikad.com or use the Contact Support Team option in the app."
+                android:text="Contact our support team at agvclubhouse@antel.com.ph or use the Contact Support Team option in the app."
                 android:textColor="#333333"
                 android:textSize="14sp" />
         </LinearLayout>

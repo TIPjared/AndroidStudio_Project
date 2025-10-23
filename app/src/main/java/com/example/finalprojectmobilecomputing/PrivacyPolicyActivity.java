@@ -128,9 +128,10 @@ public class PrivacyPolicyActivity extends AppCompatActivity {
                 
                 "11. CONTACT INFORMATION\n\n" +
                 "If you have questions about this Privacy Policy or your data, please contact us:\n" +
-                "• Email: privacy@sikad.com\n" +
-                "• Phone: +63-XXX-XXX-XXXX\n" +
-                "• Address: Technological Institute of the Philippines, Manila\n\n" +
+                "• Email: agvclubhouse@antel.com.ph\n" +
+                "• Mobile: 0917-704-0323, 0917-708-0567\n" +
+                "• Office: Accounting 436-6026, Admin 436-6745\n" +
+                "• Address: Antel Grand Village - A Quiet Place in the City\n\n" +
                 
                 "This Privacy Policy is designed specifically for the Sikad bike rental system and reflects our commitment to protecting your privacy while providing safe, efficient, and smart bike sharing services in your community.";
     }
