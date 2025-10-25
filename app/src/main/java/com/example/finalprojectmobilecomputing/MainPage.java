@@ -260,6 +260,13 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 drawerLayout.openDrawer(navigationView);
             }
         });
+
+        // --- Refresh bikes button ---
+        ImageButton refreshButton = findViewById(R.id.refreshButton);
+        refreshButton.setOnClickListener(v -> {
+            Toast.makeText(this, "Refreshing bikes...", Toast.LENGTH_SHORT).show();
+            loadAllBikes(); // Reload all bikes from Firebase
+        });
         navigationView.setNavigationItemSelectedListener(item -> {
             Intent intent;
             if (item.getItemId() == R.id.nav_history) {
@@ -1964,7 +1971,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 .addOnSuccessListener(documentSnapshot -> {
                         Log.d("MainPage", "Firestore query successful. Document exists: " + documentSnapshot.exists());
                     if (documentSnapshot.exists()) {
-                        String username = documentSnapshot.getString("username");
+                        String username = documentSnapshot.getString("name");
                             String phone = documentSnapshot.getString("phone");
                         String profileImageUrl = documentSnapshot.getString("profileImageUrl");
                         
@@ -2187,28 +2194,25 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                                             Log.w("BikeRental", "Bike document not found in Firestore: " + finalBikeId);
                                         }
                                         
-                                        // Create bike marker with appropriate design
-                                        BitmapDescriptor markerIcon;
+                                        // Only show available bikes on the map
                                         if (isAvailable) {
-                                            // Green teardrop for available bikes
-                                            markerIcon = createAvailableBikeMarker();
+                                            // Green teardrop for available bikes only
+                                            BitmapDescriptor markerIcon = createAvailableBikeMarker();
+                                            
+                                            MarkerOptions markerOptions = new MarkerOptions()
+                                                    .position(bikeLocation)
+                                                    .title("Bike " + finalBikeId)
+                                                    .snippet("Available")
+                                                    .icon(markerIcon)
+                                                    .anchor(0.5f, 1.0f);
+                                            
+                                            Marker marker = mMap.addMarker(markerOptions);
+                                            allBikeMarkers.put(finalBikeId, marker);
+                                            
+                                            Log.d("BikeRental", "✓ Added available bike marker: " + finalBikeId + " at " + bikeLocation);
                                         } else {
-                                            // White circle with bike design for rented bikes
-                                            markerIcon = createRentedBikeMarker();
+                                            Log.d("BikeRental", "Skipping rented bike: " + finalBikeId + " (not showing on map)");
                                         }
-                                        
-                                        MarkerOptions markerOptions = new MarkerOptions()
-                                                .position(bikeLocation)
-                                                .title("Bike " + finalBikeId)
-                                                .snippet(isAvailable ? "Available" : "Rented")
-                                                .icon(markerIcon)
-                                                .anchor(0.5f, 1.0f);
-                                        
-                                        Marker marker = mMap.addMarker(markerOptions);
-                                        allBikeMarkers.put(finalBikeId, marker);
-                                        
-                                        Log.d("BikeRental", "✓ Added " + (isAvailable ? "available" : "rented") + 
-                                              " bike marker: " + finalBikeId + " at " + bikeLocation);
                                     })
                                     .addOnFailureListener(e -> {
                                         Log.e("BikeRental", "Failed to get bike status for: " + finalBikeId, e);

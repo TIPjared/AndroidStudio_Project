@@ -34,6 +34,29 @@
                 android:tint="#2E7D32" />
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- Refresh Bikes Button -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/refreshButtonCard"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_margin="16dp"
+            app:cardCornerRadius="24dp"
+            app:cardElevation="8dp"
+            app:cardBackgroundColor="#FFFFFF"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <ImageButton
+                android:id="@+id/refreshButton"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/baseline_refresh_24"
+                android:contentDescription="Refresh Bikes"
+                android:padding="12dp"
+                android:tint="#2E7D32" />
+        </com.google.android.material.card.MaterialCardView>
+
         <!-- Map Fragment -->
         <fragment
             android:id="@+id/map"

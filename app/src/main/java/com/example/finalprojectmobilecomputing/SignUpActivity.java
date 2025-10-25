@@ -200,8 +200,8 @@ public class SignUpActivity extends AppCompatActivity {
                                             newUser.put("phone", phone);
                                             newUser.put("deviceId", null);
                                             newUser.put("phoneVerified", false);
-                                            newUser.put("username", "");
-                                            newUser.put("age", "");
+                                            newUser.put("name", "");
+                                            newUser.put("birthday", "");
                                             newUser.put("gender", "");
                                             newUser.put("profileImageUrl", "");
                                             newUser.put("createdAt", System.currentTimeMillis());
@@ -277,8 +277,8 @@ public class SignUpActivity extends AppCompatActivity {
                         newUser.put("phone", "");
                         newUser.put("deviceId", null);
                         newUser.put("phoneVerified", false);
-                        newUser.put("username", "");
-                        newUser.put("age", "");
+                        newUser.put("name", "");
+                        newUser.put("birthday", "");
                         newUser.put("gender", "");
                         newUser.put("profileImageUrl", "");
                         newUser.put("createdAt", System.currentTimeMillis());

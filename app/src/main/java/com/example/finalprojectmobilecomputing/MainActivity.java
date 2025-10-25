@@ -234,8 +234,8 @@ public class MainActivity extends AppCompatActivity {
                             newUser.put("phoneVerified", false);
                             newUser.put("deviceId", null);
                             newUser.put("phone", user.getPhoneNumber() != null ? user.getPhoneNumber() : "");
-                            newUser.put("username", "");
-                            newUser.put("age", "");
+                            newUser.put("name", "");
+                            newUser.put("birthday", "");
                             newUser.put("gender", "");
                             newUser.put("profileImageUrl", "");
                             newUser.put("createdAt", System.currentTimeMillis());

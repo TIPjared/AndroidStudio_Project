@@ -49,7 +49,7 @@ public class EditProfileActivity extends AppCompatActivity {
     private static final int GALLERY_REQUEST_CODE = 104;
 
     private TextView profileName, profileEmail, profilePhone;
-    private EditText emailEditText, usernameEditText, ageEditText, genderEditText;
+    private EditText emailEditText, usernameEditText, birthdayEditText, genderEditText;
     private FirebaseAuth mAuth;
     private FirebaseFirestore db;
     private DocumentReference userRef;
@@ -116,7 +116,7 @@ public class EditProfileActivity extends AppCompatActivity {
         // Form fields
         emailEditText = findViewById(R.id.emailEditText);
         usernameEditText = findViewById(R.id.usernameEditText);
-        ageEditText = findViewById(R.id.ageEditText);
+        birthdayEditText = findViewById(R.id.birthdayEditText);
         genderEditText = findViewById(R.id.genderEditText);
 
         // Profile Image
@@ -167,8 +167,8 @@ public class EditProfileActivity extends AppCompatActivity {
         // Load fresh data from Firestore in background
         userRef.get().addOnSuccessListener(documentSnapshot -> {
             if (documentSnapshot.exists()) {
-                String username = documentSnapshot.getString("username");
-                String age = documentSnapshot.getString("age");
+                String username = documentSnapshot.getString("name");
+                String birthday = documentSnapshot.getString("birthday");
                 String gender = documentSnapshot.getString("gender");
                 String phone = documentSnapshot.getString("phone");
                 String profileImageUrl = documentSnapshot.getString("profileImageUrl");
@@ -185,7 +185,7 @@ public class EditProfileActivity extends AppCompatActivity {
                     usernameEditText.setText(username);
                 }
                 
-                ageEditText.setText(age != null ? age : "");
+                birthdayEditText.setText(birthday != null ? birthday : "");
                 genderEditText.setText(gender != null ? gender : "");
                 
                 if (phone != null && !phone.isEmpty()) {
@@ -207,7 +207,7 @@ public class EditProfileActivity extends AppCompatActivity {
 
     private void saveUserData() {
         String username = usernameEditText.getText().toString().trim();
-        String age = ageEditText.getText().toString().trim();
+        String birthday = birthdayEditText.getText().toString().trim();
         String gender = genderEditText.getText().toString().trim();
 
         if (username.isEmpty()) {
@@ -216,8 +216,8 @@ public class EditProfileActivity extends AppCompatActivity {
         }
 
         Map<String, Object> userData = new HashMap<>();
-        userData.put("username", username);
-        userData.put("age", age);
+        userData.put("name", username);
+        userData.put("birthday", birthday);
         userData.put("gender", gender);
 
         Log.d("EditProfile", "Saving user data to Firestore: " + userData.toString());
