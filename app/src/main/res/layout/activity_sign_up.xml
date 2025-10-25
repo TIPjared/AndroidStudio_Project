@@ -233,6 +233,37 @@
                 android:layout_height="1dp"
                 android:background="#E0E0E0"
                 android:layout_marginBottom="16dp" />
+
+            <!-- Terms and Conditions Checkbox -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="8dp">
+
+                <CheckBox
+                    android:id="@+id/termsCheckbox"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:buttonTint="#2a8743"
+                    android:focusable="true"
+                    android:clickable="true" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:text="I agree to the Terms and Conditions"
+                    android:textColor="#1B5E20"
+                    android:textSize="14sp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:onClick="showTermsAndConditions" />
+
+            </LinearLayout>
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 

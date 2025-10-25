@@ -168,7 +168,7 @@ public class EditProfileActivity extends AppCompatActivity {
         userRef.get().addOnSuccessListener(documentSnapshot -> {
             if (documentSnapshot.exists()) {
                 String username = documentSnapshot.getString("name");
-                String birthday = documentSnapshot.getString("birthday");
+                String birthdate = documentSnapshot.getString("birthdate");
                 String gender = documentSnapshot.getString("gender");
                 String phone = documentSnapshot.getString("phone");
                 String profileImageUrl = documentSnapshot.getString("profileImageUrl");
@@ -185,7 +185,7 @@ public class EditProfileActivity extends AppCompatActivity {
                     usernameEditText.setText(username);
                 }
                 
-                birthdayEditText.setText(birthday != null ? birthday : "");
+                birthdayEditText.setText(birthdate != null ? birthdate : "");
                 genderEditText.setText(gender != null ? gender : "");
                 
                 if (phone != null && !phone.isEmpty()) {
@@ -207,7 +207,7 @@ public class EditProfileActivity extends AppCompatActivity {
 
     private void saveUserData() {
         String username = usernameEditText.getText().toString().trim();
-        String birthday = birthdayEditText.getText().toString().trim();
+        String birthdate = birthdayEditText.getText().toString().trim();
         String gender = genderEditText.getText().toString().trim();
 
         if (username.isEmpty()) {
@@ -217,7 +217,7 @@ public class EditProfileActivity extends AppCompatActivity {
 
         Map<String, Object> userData = new HashMap<>();
         userData.put("name", username);
-        userData.put("birthday", birthday);
+        userData.put("birthdate", birthdate);
         userData.put("gender", gender);
 
         Log.d("EditProfile", "Saving user data to Firestore: " + userData.toString());
