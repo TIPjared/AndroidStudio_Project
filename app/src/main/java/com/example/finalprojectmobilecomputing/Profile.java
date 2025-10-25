@@ -188,7 +188,7 @@ public class Profile extends AppCompatActivity {
         // Load fresh data from Firestore in background
         userRef.get().addOnSuccessListener(documentSnapshot -> {
             if (documentSnapshot.exists()) {
-                String username = documentSnapshot.getString("username");
+                String username = documentSnapshot.getString("name");
                 String phone = documentSnapshot.getString("phone");
                 String profileImageUrl = documentSnapshot.getString("profileImageUrl");
 

@@ -238,6 +238,7 @@ public class MainActivity extends AppCompatActivity {
                             newUser.put("birthday", "");
                             newUser.put("gender", "");
                             newUser.put("profileImageUrl", "");
+                            newUser.put("status", "ACTIVE");
                             newUser.put("createdAt", System.currentTimeMillis());
                             db.collection("users").document(userId).set(newUser);
 

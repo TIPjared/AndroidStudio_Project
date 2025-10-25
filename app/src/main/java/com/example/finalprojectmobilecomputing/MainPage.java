@@ -1972,10 +1972,28 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                         Log.d("MainPage", "Firestore query successful. Document exists: " + documentSnapshot.exists());
                     if (documentSnapshot.exists()) {
                         String username = documentSnapshot.getString("name");
-                            String phone = documentSnapshot.getString("phone");
+                        String phone = documentSnapshot.getString("phone");
                         String profileImageUrl = documentSnapshot.getString("profileImageUrl");
+                        String status = documentSnapshot.getString("status");
                         
-                            Log.d("MainPage", "Retrieved data - username: " + username + ", phone: " + phone + ", imageUrl: " + profileImageUrl);
+                        // Check user status
+                        if (status != null && !status.equals("ACTIVE")) {
+                            if (status.equals("SUSPENDED")) {
+                                Toast.makeText(MainPage.this, "Your account has been suspended. Please contact support.", Toast.LENGTH_LONG).show();
+                                mAuth.signOut();
+                                startActivity(new Intent(MainPage.this, MainActivity.class));
+                                finish();
+                                return;
+                            } else if (status.equals("BANNED")) {
+                                Toast.makeText(MainPage.this, "Your account has been banned. Please contact support.", Toast.LENGTH_LONG).show();
+                                mAuth.signOut();
+                                startActivity(new Intent(MainPage.this, MainActivity.class));
+                                finish();
+                                return;
+                            }
+                        }
+                        
+                        Log.d("MainPage", "Retrieved data - username: " + username + ", phone: " + phone + ", imageUrl: " + profileImageUrl + ", status: " + status);
                             
                             // Cache the data
                             cachedUsername = username != null ? username : "";
@@ -2041,6 +2059,23 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         View headerView = navigationView.getHeaderView(0);
         if (headerView != null) {
             loadUserProfileData(headerView);
+        }
+    }
+
+    // Method to update user status (for admin use)
+    public static void updateUserStatus(String userId, String status) {
+        if (status.equals("ACTIVE") || status.equals("SUSPENDED") || status.equals("BANNED")) {
+            FirebaseFirestore db = FirebaseFirestore.getInstance();
+            Map<String, Object> update = new HashMap<>();
+            update.put("status", status);
+            update.put("statusUpdatedAt", System.currentTimeMillis());
+            
+            db.collection("users").document(userId)
+                    .update(update)
+                    .addOnSuccessListener(aVoid -> Log.d("MainPage", "User status updated to: " + status))
+                    .addOnFailureListener(e -> Log.e("MainPage", "Failed to update user status", e));
+        } else {
+            Log.e("MainPage", "Invalid status: " + status + ". Must be ACTIVE, SUSPENDED, or BANNED");
         }
     }
 
