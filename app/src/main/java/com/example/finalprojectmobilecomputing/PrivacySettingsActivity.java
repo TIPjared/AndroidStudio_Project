@@ -304,12 +304,12 @@ public class PrivacySettingsActivity extends AppCompatActivity {
                                 csvData.append("USER DATA\n");
                                 csvData.append("Email,").append(mAuth.getCurrentUser().getEmail()).append("\n");
                                 if (userDocument.exists()) {
-                                    if (userDocument.contains("username")) {
-                                        csvData.append("Username,").append(userDocument.getString("username")).append("\n");
-                                    }
-                                    if (userDocument.contains("age")) {
-                                        csvData.append("Age,").append(userDocument.getString("age")).append("\n");
-                                    }
+                                if (userDocument.contains("name")) {
+                                    csvData.append("Name,").append(userDocument.getString("name")).append("\n");
+                                }
+                                if (userDocument.contains("birthdate")) {
+                                    csvData.append("Birthdate,").append(userDocument.getString("birthdate")).append("\n");
+                                }
                                     if (userDocument.contains("gender")) {
                                         csvData.append("Gender,").append(userDocument.getString("gender")).append("\n");
                                     }

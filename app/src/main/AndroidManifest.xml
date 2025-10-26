@@ -148,6 +148,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".EmailVerificationActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".HistoryActivity"
             android:exported="false"
             android:label="@string/ride_history"

@@ -29,8 +29,8 @@
     <string name="personal_information">Personal Information</string>
     <string name="change_profile_picture">Change Profile Picture</string>
     <string name="email">Email</string>
-    <string name="username">Username</string>
-    <string name="age">Age</string>
+    <string name="name">Name</string>
+    <string name="birthdate">Birthdate</string>
     <string name="gender">Gender</string>
     <string name="save_changes">Save Changes</string>
     <string name="cancel">Cancel</string>

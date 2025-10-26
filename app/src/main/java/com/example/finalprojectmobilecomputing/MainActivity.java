@@ -196,6 +196,28 @@ public class MainActivity extends AppCompatActivity {
                 .get()
                 .addOnSuccessListener(document -> {
                     if (document.exists()) {
+                        // Check account status first
+                        String accountStatus = document.getString("accountStatus");
+                        if (accountStatus == null) {
+                            accountStatus = "ACTIVE";
+                        }
+                        
+                        if ("SUSPENDED".equals(accountStatus) || "BANNED".equals(accountStatus)) {
+                            // Show account status dialog
+                            showAccountStatusDialog(accountStatus);
+                            return;
+                        }
+                        
+                        // Check email verification
+                        Boolean emailVerified = document.getBoolean("emailVerified");
+                        if (emailVerified == null || !emailVerified) {
+                            // Email not verified, redirect to email verification
+                            Intent intent = new Intent(MainActivity.this, EmailVerificationActivity.class);
+                            startActivity(intent);
+                            finish();
+                            return;
+                        }
+                        
                         Boolean phoneVerified = document.getBoolean("phoneVerified");
                         String savedDeviceId = document.getString("deviceId");
                         String phoneNumber = document.contains("phone") ? document.getString("phone") : "";
@@ -234,10 +256,12 @@ public class MainActivity extends AppCompatActivity {
                             newUser.put("phoneVerified", false);
                             newUser.put("deviceId", null);
                             newUser.put("phone", user.getPhoneNumber() != null ? user.getPhoneNumber() : "");
-                            newUser.put("username", "");
-                            newUser.put("age", "");
+                            newUser.put("name", "");
+                            newUser.put("birthdate", "");
                             newUser.put("gender", "");
                             newUser.put("profileImageUrl", "");
+                            newUser.put("emailVerified", true);
+                            newUser.put("accountStatus", "ACTIVE");
                             newUser.put("createdAt", System.currentTimeMillis());
                             db.collection("users").document(userId).set(newUser);
 
@@ -327,6 +351,11 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private void showAccountStatusDialog(String accountStatus) {
+        AccountStatusDialog dialog = new AccountStatusDialog(this, accountStatus);
+        dialog.show();
+    }
+
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -351,9 +380,8 @@ public class MainActivity extends AppCompatActivity {
                     if (task.isSuccessful()) {
                         FirebaseUser user = mAuth.getCurrentUser();
                         if (user != null) {
-                            Intent intent = new Intent(MainActivity.this, MainPage.class);
-                            startActivity(intent);
-                            finish();
+                            // Check if user exists in Firestore and verify status
+                            checkOTPRequirement(user.getUid());
                         }
                     } else {
                         Toast.makeText(MainActivity.this,

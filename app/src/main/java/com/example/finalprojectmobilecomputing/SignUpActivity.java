@@ -24,6 +24,7 @@ import com.google.android.gms.tasks.Task;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.firebase.firestore.FirebaseFirestore;
 
@@ -200,8 +201,10 @@ public class SignUpActivity extends AppCompatActivity {
                                             newUser.put("phone", phone);
                                             newUser.put("deviceId", null);
                                             newUser.put("phoneVerified", false);
-                                            newUser.put("username", "");
-                                            newUser.put("age", "");
+                                            newUser.put("emailVerified", false);
+                                            newUser.put("accountStatus", "ACTIVE");
+                                            newUser.put("name", "");
+                                            newUser.put("birthdate", "");
                                             newUser.put("gender", "");
                                             newUser.put("profileImageUrl", "");
                                             newUser.put("createdAt", System.currentTimeMillis());
@@ -209,13 +212,8 @@ public class SignUpActivity extends AppCompatActivity {
                                             db.collection("users").document(userId)
                                                     .set(newUser)
                                                     .addOnSuccessListener(aVoid -> {
-                                                        Toast.makeText(SignUpActivity.this, "Account created! Please verify your phone number.", Toast.LENGTH_SHORT).show();
-                                                        
-                                                        // Navigate to OTP Verification for new sign-up
-                                                        Intent intent = new Intent(SignUpActivity.this, MainActivity.class);
-                                                        intent.putExtra("phone", phone); // optional, if you want to prefill phone
-                                                        startActivity(intent);
-                                                        finish();
+                                                        // Send email verification
+                                                        sendEmailVerification();
                                                     })
                                                     .addOnFailureListener(e -> {
                                                         Toast.makeText(SignUpActivity.this, "Failed to save user: " + e.getMessage(), Toast.LENGTH_SHORT).show();
@@ -277,8 +275,10 @@ public class SignUpActivity extends AppCompatActivity {
                         newUser.put("phone", "");
                         newUser.put("deviceId", null);
                         newUser.put("phoneVerified", false);
-                        newUser.put("username", "");
-                        newUser.put("age", "");
+                        newUser.put("emailVerified", true); // Google accounts are pre-verified
+                        newUser.put("accountStatus", "ACTIVE");
+                        newUser.put("name", "");
+                        newUser.put("birthdate", "");
                         newUser.put("gender", "");
                         newUser.put("profileImageUrl", "");
                         newUser.put("createdAt", System.currentTimeMillis());
@@ -297,5 +297,29 @@ public class SignUpActivity extends AppCompatActivity {
                         Toast.makeText(SignUpActivity.this, "Authentication failed: " + task.getException().getMessage(), Toast.LENGTH_SHORT).show();
                     }
                 });
+    }
+
+    private void sendEmailVerification() {
+        FirebaseUser user = mAuth.getCurrentUser();
+        if (user != null) {
+            user.sendEmailVerification()
+                    .addOnCompleteListener(task -> {
+                        if (task.isSuccessful()) {
+                            Toast.makeText(SignUpActivity.this, "Account created! Please check your email to verify your account.", Toast.LENGTH_LONG).show();
+                            
+                            // Navigate to email verification activity
+                            Intent intent = new Intent(SignUpActivity.this, EmailVerificationActivity.class);
+                            startActivity(intent);
+                            finish();
+                        } else {
+                            Toast.makeText(SignUpActivity.this, "Failed to send verification email: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
+                            
+                            // Still navigate to email verification activity
+                            Intent intent = new Intent(SignUpActivity.this, EmailVerificationActivity.class);
+                            startActivity(intent);
+                            finish();
+                        }
+                    });
+        }
     }
 }

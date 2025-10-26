@@ -44,16 +44,46 @@ public class SplashActivity extends AppCompatActivity {
                 String uid = currentUser.getUid();
                 db.collection("users").document(uid).get()
                         .addOnSuccessListener(doc -> {
-                            if (doc.exists() && Boolean.TRUE.equals(doc.getBoolean("phoneVerified"))) {
-                                Log.d(TAG, "User verified, going to MainPage");
-                                startActivity(new Intent(SplashActivity.this, MainPage.class));
+                            if (doc.exists()) {
+                                // Check account status first
+                                String accountStatus = doc.getString("accountStatus");
+                                if (accountStatus == null) {
+                                    accountStatus = "ACTIVE";
+                                }
+                                
+                                if ("SUSPENDED".equals(accountStatus) || "BANNED".equals(accountStatus)) {
+                                    Log.d(TAG, "Account " + accountStatus + ", showing status dialog");
+                                    // Show account status dialog
+                                    AccountStatusDialog dialog = new AccountStatusDialog(SplashActivity.this, accountStatus);
+                                    dialog.show();
+                                    return;
+                                }
+                                
+                                // Check email verification
+                                Boolean emailVerified = doc.getBoolean("emailVerified");
+                                if (emailVerified == null || !emailVerified) {
+                                    Log.d(TAG, "Email not verified, redirecting to email verification");
+                                    Intent intent = new Intent(SplashActivity.this, EmailVerificationActivity.class);
+                                    startActivity(intent);
+                                    finish();
+                                    return;
+                                }
+                                
+                                // Check phone verification
+                                Boolean phoneVerified = doc.getBoolean("phoneVerified");
+                                
+                                if (Boolean.TRUE.equals(phoneVerified)) {
+                                    Log.d(TAG, "User fully verified, going to MainPage");
+                                    startActivity(new Intent(SplashActivity.this, MainPage.class));
+                                } else {
+                                    Log.d(TAG, "Phone not verified, redirecting to OTPVerification");
+                                    Intent intent = new Intent(SplashActivity.this, OTPVerification.class);
+                                    startActivity(intent);
+                                }
                             } else {
-                                Log.d(TAG, "User not verified, redirecting to OTPVerification");
-                                // optional: sign out to force re-login
+                                Log.d(TAG, "User document not found, redirecting to login");
                                 auth.signOut();
-                                Intent intent = new Intent(SplashActivity.this, MainActivity.class);
-                                intent.putExtra("requireOTP", true);
-                                startActivity(intent);
+                                startActivity(new Intent(SplashActivity.this, MainActivity.class));
                             }
                             finish();
                         })

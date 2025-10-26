@@ -49,7 +49,7 @@ public class EditProfileActivity extends AppCompatActivity {
     private static final int GALLERY_REQUEST_CODE = 104;
 
     private TextView profileName, profileEmail, profilePhone;
-    private EditText emailEditText, usernameEditText, ageEditText, genderEditText;
+    private EditText emailEditText, nameEditText, birthdateEditText, genderEditText;
     private FirebaseAuth mAuth;
     private FirebaseFirestore db;
     private DocumentReference userRef;
@@ -105,6 +105,9 @@ public class EditProfileActivity extends AppCompatActivity {
 
         // Change Profile Picture Button Click Listener
         findViewById(R.id.changeProfilePictureButton).setOnClickListener(v -> showImagePickerDialog());
+        
+        // Birthdate field click listener for date picker
+        birthdateEditText.setOnClickListener(v -> showDatePickerDialog());
     }
 
     private void initializeUI() {
@@ -115,8 +118,8 @@ public class EditProfileActivity extends AppCompatActivity {
         
         // Form fields
         emailEditText = findViewById(R.id.emailEditText);
-        usernameEditText = findViewById(R.id.usernameEditText);
-        ageEditText = findViewById(R.id.ageEditText);
+        nameEditText = findViewById(R.id.usernameEditText);
+        birthdateEditText = findViewById(R.id.ageEditText);
         genderEditText = findViewById(R.id.genderEditText);
 
         // Profile Image
@@ -153,7 +156,7 @@ public class EditProfileActivity extends AppCompatActivity {
         // Load cached data first for instant display
         if (MainPage.dataLoaded) {
             profileName.setText(MainPage.cachedUsername.isEmpty() ? "User Name" : MainPage.cachedUsername);
-            usernameEditText.setText(MainPage.cachedUsername);
+            nameEditText.setText(MainPage.cachedUsername);
             profilePhone.setText(formatPhoneForDisplay(MainPage.cachedPhone));
             
             if (!MainPage.cachedProfileImageUrl.isEmpty()) {
@@ -167,25 +170,25 @@ public class EditProfileActivity extends AppCompatActivity {
         // Load fresh data from Firestore in background
         userRef.get().addOnSuccessListener(documentSnapshot -> {
             if (documentSnapshot.exists()) {
-                String username = documentSnapshot.getString("username");
-                String age = documentSnapshot.getString("age");
+                String name = documentSnapshot.getString("name");
+                String birthdate = documentSnapshot.getString("birthdate");
                 String gender = documentSnapshot.getString("gender");
                 String phone = documentSnapshot.getString("phone");
                 String profileImageUrl = documentSnapshot.getString("profileImageUrl");
 
                 // Update cache
-                MainPage.cachedUsername = username != null ? username : "";
+                MainPage.cachedUsername = name != null ? name : "";
                 MainPage.cachedPhone = phone != null ? phone : "";
                 MainPage.cachedProfileImageUrl = profileImageUrl != null ? profileImageUrl : "";
                 MainPage.dataLoaded = true;
 
                 // Update UI with fresh data
-                if (username != null && !username.isEmpty()) {
-                    profileName.setText(username);
-                    usernameEditText.setText(username);
+                if (name != null && !name.isEmpty()) {
+                    profileName.setText(name);
+                    nameEditText.setText(name);
                 }
                 
-                ageEditText.setText(age != null ? age : "");
+                birthdateEditText.setText(birthdate != null ? birthdate : "");
                 genderEditText.setText(gender != null ? gender : "");
                 
                 if (phone != null && !phone.isEmpty()) {
@@ -206,18 +209,18 @@ public class EditProfileActivity extends AppCompatActivity {
     }
 
     private void saveUserData() {
-        String username = usernameEditText.getText().toString().trim();
-        String age = ageEditText.getText().toString().trim();
+        String name = nameEditText.getText().toString().trim();
+        String birthdate = birthdateEditText.getText().toString().trim();
         String gender = genderEditText.getText().toString().trim();
 
-        if (username.isEmpty()) {
-            usernameEditText.setError("Username is required");
+        if (name.isEmpty()) {
+            nameEditText.setError("Name is required");
             return;
         }
 
         Map<String, Object> userData = new HashMap<>();
-        userData.put("username", username);
-        userData.put("age", age);
+        userData.put("name", name);
+        userData.put("birthdate", birthdate);
         userData.put("gender", gender);
 
         Log.d("EditProfile", "Saving user data to Firestore: " + userData.toString());
@@ -226,10 +229,10 @@ public class EditProfileActivity extends AppCompatActivity {
                 .addOnSuccessListener(aVoid -> {
                     Log.d("EditProfile", "Profile updated successfully in Firestore");
                     // Update cache with new data
-                    MainPage.cachedUsername = username;
+                    MainPage.cachedUsername = name;
                     MainPage.dataLoaded = true;
                     
-                    profileName.setText(username);
+                    profileName.setText(name);
                     Toast.makeText(EditProfileActivity.this, "Profile Updated", Toast.LENGTH_SHORT).show();
                     finish(); // Go back to profile screen
                 })
@@ -605,5 +608,44 @@ public class EditProfileActivity extends AppCompatActivity {
                         Toast.makeText(EditProfileActivity.this, "Failed to update profile picture", Toast.LENGTH_SHORT).show();
                     });
         }
+    }
+
+    private void showDatePickerDialog() {
+        // Get current date or default to 2000-01-01
+        String currentDate = birthdateEditText.getText().toString().trim();
+        int year, month, day;
+        
+        if (!currentDate.isEmpty() && currentDate.matches("\\d{2}/\\d{2}/\\d{4}")) {
+            // Parse existing date (MM/dd/yyyy format)
+            String[] parts = currentDate.split("/");
+            month = Integer.parseInt(parts[0]) - 1; // Calendar months are 0-based
+            day = Integer.parseInt(parts[1]);
+            year = Integer.parseInt(parts[2]);
+        } else {
+            // Default to 2000-01-01
+            year = 2000;
+            month = 0; // January
+            day = 1;
+        }
+
+        android.app.DatePickerDialog datePickerDialog = new android.app.DatePickerDialog(
+                this,
+                (view, selectedYear, selectedMonth, selectedDay) -> {
+                    // Format date as MM/dd/yyyy
+                    String formattedDate = String.format("%02d/%02d/%04d", 
+                            selectedMonth + 1, selectedDay, selectedYear);
+                    birthdateEditText.setText(formattedDate);
+                },
+                year, month, day
+        );
+        
+        // Set max date to today (can't be born in the future)
+        datePickerDialog.getDatePicker().setMaxDate(System.currentTimeMillis());
+        
+        // Set min date to 100 years ago
+        long minDate = System.currentTimeMillis() - (100L * 365 * 24 * 60 * 60 * 1000);
+        datePickerDialog.getDatePicker().setMinDate(minDate);
+        
+        datePickerDialog.show();
     }
 }
