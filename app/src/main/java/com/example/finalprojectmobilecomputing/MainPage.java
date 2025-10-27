@@ -23,6 +23,8 @@ import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.view.animation.Interpolator;
 import android.view.animation.LinearInterpolator;
+
+import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 import com.google.android.gms.maps.model.BitmapDescriptor;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
@@ -129,11 +131,11 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     private GoogleMap mMap;
     private FusedLocationProviderClient fusedLocationClient;
     private LatLng currentLocation;
-    private List<LatLng> antelBoundary;
     private Marker bikeMarker; // This will be the rented bike marker
     private Marker userMarker; // User's own location marker
     private List<LatLng> ridePathPoints = new ArrayList<>();
     private Polyline ridePath;
+    private long lastAlertTime = 0;
     private DrawerLayout drawerLayout;
     private ImageButton menuButton;
     private NavigationView navigationView;
@@ -237,7 +239,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
         // Firebase references - Realtime Database for GPS data, Firestore for user profiles
         rideLogsRef = FirebaseDatabase.getInstance().getReference("rideLogs"); // GPS data
-        bikesRef = FirebaseDatabase.getInstance().getReference("gpsData"); // Available bikes GPS data
+        bikesRef = FirebaseDatabase.getInstance().getReference("bikes"); // Available bikes GPS data
         firestore = FirebaseFirestore.getInstance(); // User profiles and feedback
 
         // Initialize current user for login tracking
@@ -1189,9 +1191,9 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         ridePathPoints.clear();
 
         // Reset map camera to show the entire boundary
-        if (antelBoundary != null && !antelBoundary.isEmpty()) {
+        if (activeGeofencePoints != null && !activeGeofencePoints.isEmpty()) {
             LatLngBounds.Builder builder = new LatLngBounds.Builder();
-            for (LatLng point : antelBoundary) {
+            for (LatLng point : activeGeofencePoints) {
                 builder.include(point);
             }
             LatLngBounds bounds = builder.build();
@@ -1263,9 +1265,10 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                                     .fillColor(ColorUtils.setAlphaComponent(Color.parseColor(colorCode), 80)));
 
                             // Add geofences dynamically
-                            for (LatLng latLng : activeGeofencePoints) {
-                                addGeofence(latLng.latitude, latLng.longitude);
-                            }
+                            // for (LatLng latLng : activeGeofencePoints) {
+                            //    addGeofence(latLng.latitude, latLng.longitude);
+                            // }
+
 
                             Log.d("Geofence", "Active geofence loaded: " + name);
                         }
@@ -1274,50 +1277,6 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                     }
                 })
                 .addOnFailureListener(e -> Log.e("Geofence", "Error fetching geofence data", e));
-    }
-
-    private void addGeofence(double latitude, double longitude) {
-        Geofence geofence = new Geofence.Builder()
-                .setRequestId("DynamicGeofence_" + latitude + "_" + longitude)
-                .setCircularRegion(
-                        latitude,
-                        longitude,
-                        100  // radius in meters — adjust as needed
-                )
-                .setExpirationDuration(Geofence.NEVER_EXPIRE)
-                .setTransitionTypes(
-                        Geofence.GEOFENCE_TRANSITION_ENTER |
-                                Geofence.GEOFENCE_TRANSITION_EXIT
-                )
-                .build();
-
-        GeofencingRequest geofencingRequest = new GeofencingRequest.Builder()
-                .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
-                .addGeofence(geofence)
-                .build();
-
-        PendingIntent pendingIntent = PendingIntent.getBroadcast(
-                this,
-                0,
-                new Intent(this, GeofenceBroadcastReceiver.class),
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-        );
-
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED) {
-            Log.w("Geofence", "Permission not granted.");
-            return;
-        }
-
-        geofencingClient.addGeofences(geofencingRequest, pendingIntent)
-                .addOnSuccessListener(aVoid ->
-                        Log.d("Geofence", "Added geofence at: " + latitude + ", " + longitude))
-                .addOnFailureListener(e ->
-                        Log.e("Geofence", "Failed to add geofence", e));
-    }
-    private void addPredefinedMarker(String title, LatLng coords) {
-        mMap.addMarker(new MarkerOptions().position(coords).title(title));
-        predefinedLocations.put(title, coords);
     }
 
     @Override
@@ -1341,57 +1300,6 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             }
         }
     }
-    private LatLng getPolygonCenter(List<LatLng> points) {
-        double lat = 0, lng = 0;
-        for (LatLng p : points) {
-            lat += p.latitude;
-            lng += p.longitude;
-        }
-        return new LatLng(lat / points.size(), lng / points.size());
-    }
-
-    private void addWakeUpGeofence(LatLng center, float radiusMeters) {
-        Geofence geofence = new Geofence.Builder()
-                .setRequestId("village-wakeup")
-                .setCircularRegion(center.latitude, center.longitude, radiusMeters)
-                .setExpirationDuration(Geofence.NEVER_EXPIRE)
-                .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER | Geofence.GEOFENCE_TRANSITION_EXIT)
-                .build();
-
-        GeofencingRequest geofencingRequest = new GeofencingRequest.Builder()
-                .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
-                .addGeofence(geofence)
-                .build();
-
-        PendingIntent geofencePendingIntent = PendingIntent.getBroadcast(
-                this, 0, new Intent(this, GeofenceBroadcastReceiver.class),
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
-        );
-
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                == PackageManager.PERMISSION_GRANTED) {
-            geofencingClient.addGeofences(geofencingRequest, geofencePendingIntent)
-                    .addOnSuccessListener(aVoid -> Log.d("GEOFENCE", "Wake-up geofence added"))
-                    .addOnFailureListener(e -> Log.e("GEOFENCE", "Failed to add wake-up geofence", e));
-        }
-    }
-    private float getMaxDistanceFromCenter(LatLng center, List<LatLng> points) {
-        float maxDistance = 0;
-        Location centerLoc = new Location("");
-        centerLoc.setLatitude(center.latitude);
-        centerLoc.setLongitude(center.longitude);
-
-        for (LatLng p : points) {
-            Location pointLoc = new Location("");
-            pointLoc.setLatitude(p.latitude);
-            pointLoc.setLongitude(p.longitude);
-            float distance = centerLoc.distanceTo(pointLoc);
-            if (distance > maxDistance) {
-                maxDistance = distance;
-            }
-        }
-        return maxDistance;
-    }
 
     private void requestLocationPermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
@@ -1406,7 +1314,6 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             enableMyLocation();
         }
     }
-
 
 
     //Location Updates
@@ -2128,116 +2035,114 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
      */
     private void loadAllBikes() {
         if (mMap == null) return;
-        
-        Log.d("BikeRental", "Loading all bikes from Firebase (gpsData + Firestore bikes)");
-        
-        // Listen to GPS data from Realtime Database
-        bikesRef.addValueEventListener(new com.google.firebase.database.ValueEventListener() {
-            @Override
-            public void onDataChange(@NonNull com.google.firebase.database.DataSnapshot snapshot) {
-                // Only load bikes if no active rental
-                if (rentedBikeId != null) {
-                    Log.d("BikeRental", "Active rental exists, skipping bike load");
-                    return;
-                }
-                
-                // Clear existing bike markers
-                for (Marker marker : allBikeMarkers.values()) {
-                    marker.remove();
-                }
-                allBikeMarkers.clear();
-                
-                // Add marker for each bike in gpsData
-                for (com.google.firebase.database.DataSnapshot bikeSnapshot : snapshot.getChildren()) {
-                    String bikeId = bikeSnapshot.getKey();
-                    
-                    // Get bike location from gpsData/bike_xxx/latest/
-                    com.google.firebase.database.DataSnapshot latestSnapshot = bikeSnapshot.child("latest");
-                    
-                    // Parse latitude and longitude as strings
-                    Object latObj = latestSnapshot.child("latitude").getValue();
-                    Object lngObj = latestSnapshot.child("longitude").getValue();
 
-                    if (latObj != null && lngObj != null && bikeId != null) {
-                        try {
-                            double lat = Double.parseDouble(latObj.toString());
-                            double lng = Double.parseDouble(lngObj.toString());
-                            LatLng bikeLocation = new LatLng(lat, lng);
-                            
-                            // Get bike status from Firestore bikes collection
-                            final String finalBikeId = bikeId;
-                            firestore.collection("bikes").document(bikeId)
-                                    .get()
-                                    .addOnSuccessListener(document -> {
-                                        boolean isAvailable = true;
-                                        boolean isActive = false;
-                                        
-                                        if (document.exists()) {
-                                            String status = document.getString("status");
-                                            Boolean active = document.getBoolean("isActive");
-                                            String rentedBy = document.getString("rentedBy");
-                                            
-                                            // Bike is available if: status is "available" AND not currently rented
-                                            isAvailable = "available".equals(status) && (rentedBy == null || rentedBy.isEmpty());
-                                            isActive = active != null && active;
-                                            
-                                            Log.d("BikeRental", "Bike " + finalBikeId + " - status: " + status + 
-                                                  ", isActive: " + isActive + ", rentedBy: " + rentedBy + ", available: " + isAvailable);
-                                        } else {
-                                            Log.w("BikeRental", "Bike document not found in Firestore: " + finalBikeId);
-                                        }
-                                        
-                                        // Create bike marker with appropriate design
-                                        BitmapDescriptor markerIcon;
-                                        if (isAvailable) {
-                                            // Green teardrop for available bikes
-                                            markerIcon = createAvailableBikeMarker();
-                                        } else {
-                                            // White circle with bike design for rented bikes
-                                            markerIcon = createRentedBikeMarker();
-                                        }
-                                        
-                                        MarkerOptions markerOptions = new MarkerOptions()
-                                                .position(bikeLocation)
-                                                .title("Bike " + finalBikeId)
-                                                .snippet(isAvailable ? "Available" : "Rented")
-                                                .icon(markerIcon)
-                                                .anchor(0.5f, 1.0f);
-                                        
-                                        Marker marker = mMap.addMarker(markerOptions);
-                                        allBikeMarkers.put(finalBikeId, marker);
-                                        
-                                        Log.d("BikeRental", "✓ Added " + (isAvailable ? "available" : "rented") + 
-                                              " bike marker: " + finalBikeId + " at " + bikeLocation);
-                                    })
-                                    .addOnFailureListener(e -> {
-                                        Log.e("BikeRental", "Failed to get bike status for: " + finalBikeId, e);
-                                        // Still add marker as unknown status (blue)
-                                        MarkerOptions markerOptions = new MarkerOptions()
-                                                .position(bikeLocation)
-                                                .title("Bike " + finalBikeId)
-                                                .snippet("Status unknown")
-                                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))
-                                                .anchor(0.5f, 1.0f);
-                                        
-                                        Marker marker = mMap.addMarker(markerOptions);
-                                        allBikeMarkers.put(finalBikeId, marker);
-                                    });
-                            
-                        } catch (NumberFormatException e) {
-                            Log.e("BikeRental", "Failed to parse coordinates for bike: " + bikeId, e);
-                        }
-                    }
+        Log.d("BikeRental", "Setting up listener for all bikes...");
+
+        // Use ChildEventListener for more granular updates
+        bikesRef.addChildEventListener(new com.google.firebase.database.ChildEventListener() {
+
+            // Called when a new bike is added
+            @Override
+            public void onChildAdded(@NonNull com.google.firebase.database.DataSnapshot bikeSnapshot, @Nullable String previousChildName) {
+                // Only process if no active rental
+                if (rentedBikeId == null) {
+                    updateOrAddBikeMarker(bikeSnapshot);
                 }
-                
-                Log.d("BikeRental", "Bikes loading completed from gpsData");
             }
-            
+
+            // Called when a bike's data changes (e.g., location, status)
+            @Override
+            public void onChildChanged(@NonNull com.google.firebase.database.DataSnapshot bikeSnapshot, @Nullable String previousChildName) {
+                // Only process if no active rental
+                if (rentedBikeId == null) {
+                    updateOrAddBikeMarker(bikeSnapshot);
+                }
+            }
+
+            // Called when a bike is removed
+            @Override
+            public void onChildRemoved(@NonNull com.google.firebase.database.DataSnapshot bikeSnapshot) {
+                String bikeId = bikeSnapshot.getKey();
+                if (bikeId != null && allBikeMarkers.containsKey(bikeId)) {
+                    Marker marker = allBikeMarkers.get(bikeId);
+                    if (marker != null) {
+                        marker.remove(); // Remove marker from the map
+                    }
+                    allBikeMarkers.remove(bikeId); // Remove from our tracking map
+                    Log.d("BikeRental", "Removed bike marker: " + bikeId);
+                }
+            }
+
+            // Called when a bike's order changes (less relevant here)
+            @Override
+            public void onChildMoved(@NonNull com.google.firebase.database.DataSnapshot snapshot, @Nullable String previousChildName) {
+                // Can often be ignored for map markers unless order matters
+            }
+
             @Override
             public void onCancelled(@NonNull com.google.firebase.database.DatabaseError error) {
-                Log.e("BikeRental", "Failed to load bikes from gpsData: " + error.getMessage());
+                Log.e("BikeRental", "Failed to load bikes: " + error.getMessage());
             }
         });
+    }
+
+    private void updateOrAddBikeMarker(com.google.firebase.database.DataSnapshot bikeSnapshot) {
+        String bikeId = bikeSnapshot.getKey();
+        if (bikeId == null) return;
+
+        // --- Read location and status directly ---
+        Object latObj = bikeSnapshot.child("latitude").getValue();
+        Object lngObj = bikeSnapshot.child("longitude").getValue();
+        Object statusObj = bikeSnapshot.child("status").getValue(); // Get status from RTDB
+
+        if (latObj != null && lngObj != null) {
+            try {
+                double lat = Double.parseDouble(latObj.toString());
+                double lng = Double.parseDouble(lngObj.toString());
+                LatLng bikeLocation = new LatLng(lat, lng);
+                String status = (statusObj != null) ? statusObj.toString() : "unknown"; // Default status
+
+                // Determine availability based *only* on RTDB status for efficiency
+                boolean isAvailable = "AVAILABLE".equalsIgnoreCase(status); // Use AVAILABLE status from RTDB
+
+                // --- Update existing marker or create a new one ---
+                Marker existingMarker = allBikeMarkers.get(bikeId);
+
+                if (existingMarker != null) {
+                    // Marker exists, update its position and potentially icon/snippet
+                    existingMarker.setPosition(bikeLocation);
+                    BitmapDescriptor newIcon = isAvailable ? createAvailableBikeMarker() : createRentedBikeMarker();
+                    existingMarker.setIcon(newIcon);
+                    existingMarker.setSnippet(isAvailable ? "Available" : "Rented"); // Update snippet too
+                    Log.d("BikeRental", "Updated marker: " + bikeId);
+
+                } else {
+                    // Marker doesn't exist, create a new one
+                    BitmapDescriptor markerIcon = isAvailable ? createAvailableBikeMarker() : createRentedBikeMarker();
+                    MarkerOptions markerOptions = new MarkerOptions()
+                            .position(bikeLocation)
+                            .title("Bike " + bikeId)
+                            .snippet(isAvailable ? "Available" : "Rented")
+                            .icon(markerIcon)
+                            .anchor(0.5f, 1.0f);
+
+                    Marker newMarker = mMap.addMarker(markerOptions);
+                    allBikeMarkers.put(bikeId, newMarker); // Add to tracking map
+                    Log.d("BikeRental", "Added new marker: " + bikeId);
+                }
+
+            } catch (NumberFormatException e) {
+                Log.e("BikeRental", "Failed to parse coordinates for bike: " + bikeId, e);
+            }
+        } else {
+            // If location data is missing, remove the marker if it exists
+            Marker existingMarker = allBikeMarkers.get(bikeId);
+            if (existingMarker != null) {
+                existingMarker.remove();
+                allBikeMarkers.remove(bikeId);
+                Log.d("BikeRental", "Removed marker due to missing location: " + bikeId);
+            }
+        }
     }
     
     /**
@@ -2336,7 +2241,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
      */
     private void listenToRentedBikeGPS(String bikeId) {
         // Listen to gpsData/bike_xxx/latest/
-        DatabaseReference rentedBikeRef = bikesRef.child(bikeId).child("latest");
+        DatabaseReference rentedBikeRef = bikesRef.child(bikeId);
         
         rentedBikeRef.addValueEventListener(new com.google.firebase.database.ValueEventListener() {
             @Override
@@ -2358,9 +2263,12 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
                         boolean inside = isWithinGeofence(newBikeLocation);
 
-                        if (!inside && !alertScreenActive) {
-                            alertScreenActive = true;
-                            triggerAlertScreen();
+                        if (!inside) {
+                            long now = System.currentTimeMillis();
+                            if (!alertScreenActive && now - lastAlertTime > 2000) { // 2s debounce
+                                lastAlertTime = now;
+                                triggerAlertScreen();
+                            }
                         } else if (inside && alertScreenActive) {
                             alertScreenActive = false;
                             stopAlertScreen();
@@ -2417,8 +2325,10 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     }
 
     private void triggerAlertScreen() {
+        if (alertScreenActive) return; // Already active, don't start again
+        alertScreenActive = true;
         Intent intent = new Intent(MainPage.this, AlertActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         startActivity(intent);
     }
 

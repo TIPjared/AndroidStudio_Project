@@ -56,10 +56,14 @@ public class AlertActivity extends AppCompatActivity {
 
     private void stopAlertsAndFinish() {
         if (mediaPlayer != null) {
-            mediaPlayer.stop();
+            if (mediaPlayer.isPlaying()) mediaPlayer.stop();
             mediaPlayer.release();
+            mediaPlayer = null;
         }
-        if (vibrator != null) vibrator.cancel();
+        if (vibrator != null) {
+            vibrator.cancel();
+            vibrator = null;
+        }
         finish();
     }
 
