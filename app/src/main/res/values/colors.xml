@@ -19,4 +19,8 @@
     <color name="colorText">#212121</color>
     <color name="colorSecondaryText">#757575</color>
     <color name="colorCardBackground">#F5F5F5</color>
+    
+    <!-- Email Verification Colors -->
+    <color name="primary_color">#2E7D32</color>
+    <color name="gray">#757575</color>
 </resources>

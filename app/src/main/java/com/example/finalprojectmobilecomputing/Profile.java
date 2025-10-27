@@ -188,19 +188,19 @@ public class Profile extends AppCompatActivity {
         // Load fresh data from Firestore in background
         userRef.get().addOnSuccessListener(documentSnapshot -> {
             if (documentSnapshot.exists()) {
-                String username = documentSnapshot.getString("username");
+                String name = documentSnapshot.getString("name");
                 String phone = documentSnapshot.getString("phone");
                 String profileImageUrl = documentSnapshot.getString("profileImageUrl");
 
                 // Update cache
-                MainPage.cachedUsername = username != null ? username : "";
+                MainPage.cachedUsername = name != null ? name : "";
                 MainPage.cachedPhone = phone != null ? phone : "";
                 MainPage.cachedProfileImageUrl = profileImageUrl != null ? profileImageUrl : "";
                 MainPage.dataLoaded = true;
 
                 // Update UI with fresh data
-                if (username != null && !username.isEmpty()) {
-                    profileName.setText(username);
+                if (name != null && !name.isEmpty()) {
+                    profileName.setText(name);
                 }
                 
                 if (phone != null && !phone.isEmpty()) {

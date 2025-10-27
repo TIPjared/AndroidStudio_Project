@@ -58,9 +58,9 @@ public class RideDetailsActivity extends AppCompatActivity {
                 .get()
                 .addOnSuccessListener(documentSnapshot -> {
                     if (documentSnapshot.exists()) {
-                        String username = documentSnapshot.getString("username");
-                        if (username != null && !username.isEmpty()) {
-                            greetingText.setText("Hi, " + username);
+                        String name = documentSnapshot.getString("name");
+                        if (name != null && !name.isEmpty()) {
+                            greetingText.setText("Hi, " + name);
                         }
                     }
                 });

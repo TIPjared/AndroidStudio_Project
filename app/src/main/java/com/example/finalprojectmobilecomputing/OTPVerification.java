@@ -112,6 +112,8 @@ public class OTPVerification extends AppCompatActivity {
                             finish();
                         } else {
                             Toast.makeText(this, "Verifying number: " + phoneNumber, Toast.LENGTH_SHORT).show();
+                            // Automatically send OTP when activity starts
+                            sendInitialOtp();
                         }
                     } else {
                         Toast.makeText(this, "User data not found.", Toast.LENGTH_SHORT).show();
@@ -277,6 +279,44 @@ public class OTPVerification extends AppCompatActivity {
         int remaining = DAILY_OTP_LIMIT - (currentCount + 1);
         if (remaining > 0) {
             Toast.makeText(this, "OTP sent! " + remaining + " remaining today.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    // Send initial OTP when activity starts
+    private void sendInitialOtp() {
+        if (phoneNumber == null || phoneNumber.isEmpty()) {
+            Toast.makeText(this, "No phone number found", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Toast.makeText(this, "Sending OTP...", Toast.LENGTH_SHORT).show();
+
+        try {
+            JSONObject jsonBody = new JSONObject();
+            jsonBody.put("phone", phoneNumber);
+
+            JsonObjectRequest request = new JsonObjectRequest(
+                    Request.Method.POST,
+                    RESEND_URL,
+                    jsonBody,
+                    response -> {
+                        boolean success = response.optBoolean("success", false);
+                        if (success) {
+                            Toast.makeText(this, "OTP sent successfully!", Toast.LENGTH_SHORT).show();
+                            startResendTimer();
+                            updateQuotaCount();
+                        } else {
+                            Toast.makeText(this, response.optString("message", "Failed to send OTP"), Toast.LENGTH_SHORT).show();
+                        }
+                    },
+                    error -> {
+                        Toast.makeText(this, "Server error: " + error.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+            );
+
+            Volley.newRequestQueue(this).add(request);
+        } catch (JSONException e) {
+            Toast.makeText(this, "Error preparing request", Toast.LENGTH_SHORT).show();
         }
     }
 

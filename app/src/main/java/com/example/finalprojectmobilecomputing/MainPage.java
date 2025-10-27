@@ -1964,14 +1964,14 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 .addOnSuccessListener(documentSnapshot -> {
                         Log.d("MainPage", "Firestore query successful. Document exists: " + documentSnapshot.exists());
                     if (documentSnapshot.exists()) {
-                        String username = documentSnapshot.getString("username");
+                        String name = documentSnapshot.getString("name");
                             String phone = documentSnapshot.getString("phone");
                         String profileImageUrl = documentSnapshot.getString("profileImageUrl");
                         
-                            Log.d("MainPage", "Retrieved data - username: " + username + ", phone: " + phone + ", imageUrl: " + profileImageUrl);
+                            Log.d("MainPage", "Retrieved data - name: " + name + ", phone: " + phone + ", imageUrl: " + profileImageUrl);
                             
                             // Cache the data
-                            cachedUsername = username != null ? username : "";
+                            cachedUsername = name != null ? name : "";
                             cachedPhone = phone != null ? phone : "";
                             cachedProfileImageUrl = profileImageUrl != null ? profileImageUrl : "";
                             dataLoaded = true;

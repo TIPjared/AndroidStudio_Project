@@ -225,7 +225,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="12dp"
-                            android:hint="@string/username"
+                            android:hint="@string/name"
                             app:boxStrokeColor="#4CAF50"
                             app:hintTextColor="#4CAF50">
 
@@ -244,19 +244,19 @@
                         android:layout_marginBottom="24dp"
                         android:orientation="horizontal">
 
-                        <!-- Age field -->
+                        <!-- Birthdate field -->
                         <LinearLayout
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_marginEnd="8dp"
-                            android:layout_weight="1"
+                            android:layout_weight="1.2"
                             android:gravity="center_vertical"
                             android:orientation="horizontal">
 
                             <ImageView
                                 android:layout_width="20dp"
                                 android:layout_height="20dp"
-                                android:src="@drawable/age"
+                                android:src="@drawable/ic_birthday"
                                 app:tint="#4CAF50" />
 
                             <com.google.android.material.textfield.TextInputLayout
@@ -264,15 +264,19 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="12dp"
-                                android:hint="@string/age"
+                                android:hint="@string/birthdate"
                                 app:boxStrokeColor="#4CAF50"
-                                app:hintTextColor="#4CAF50">
+                                app:hintTextColor="#4CAF50"
+                                app:helperText="MM/DD/YYYY"
+                                app:helperTextTextColor="#757575">
 
                                 <com.google.android.material.textfield.TextInputEditText
                                     android:id="@+id/ageEditText"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
-                                    android:inputType="number"
+                                    android:inputType="none"
+                                    android:focusable="false"
+                                    android:clickable="true"
                                     android:textColor="#212121"
                                     android:textColorHint="#757575" />
                             </com.google.android.material.textfield.TextInputLayout>
@@ -283,7 +287,7 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="8dp"
-                            android:layout_weight="1"
+                            android:layout_weight="0.8"
                             android:gravity="center_vertical"
                             android:orientation="horizontal">
 

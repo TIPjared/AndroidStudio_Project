@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/colorBackground"
+    android:padding="@dimen/margin_large">
+
+    <!-- Guidelines for responsive layout -->
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/startGuide"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_percent="0.08" />
+
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/endGuide"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_percent="0.92" />
+
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/topGuide"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        app:layout_constraintGuide_percent="0.12" />
+
+    <!-- Header Section -->
+    <LinearLayout
+        android:id="@+id/headerSection"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        app:layout_constraintStart_toStartOf="@id/startGuide"
+        app:layout_constraintEnd_toEndOf="@id/endGuide"
+        app:layout_constraintTop_toTopOf="@id/topGuide">
+
+        <!-- Email Icon -->
+        <ImageView
+            android:layout_width="100dp"
+            android:layout_height="100dp"
+            android:layout_marginBottom="@dimen/margin_large"
+            android:src="@drawable/ic_email_verification"
+            android:contentDescription="Email verification icon"
+            android:background="@drawable/circle_background"
+            android:padding="@dimen/margin_medium" />
+
+        <!-- Title -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Verify Your Email"
+            android:textSize="@dimen/title_text_size"
+            android:textStyle="bold"
+            android:textColor="@color/sikad_green_dark"
+            android:layout_marginBottom="@dimen/margin_small"
+            android:fontFamily="sans-serif-black" />
+
+        <!-- Subtitle -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="We've sent a verification link to your email"
+            android:textSize="@dimen/body_text_size"
+            android:textColor="@color/textSecondary"
+            android:gravity="center"
+            android:layout_marginBottom="@dimen/margin_medium" />
+
+    </LinearLayout>
+
+    <!-- Main Content Card -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/mainContentCard"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/margin_xlarge"
+        app:cardCornerRadius="@dimen/card_corner_radius"
+        app:cardBackgroundColor="@color/white"
+        app:cardElevation="@dimen/card_elevation"
+        app:layout_constraintStart_toStartOf="@id/startGuide"
+        app:layout_constraintEnd_toEndOf="@id/endGuide"
+        app:layout_constraintTop_toBottomOf="@+id/headerSection">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="@dimen/input_padding">
+
+            <!-- Email Display -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Email Address"
+                android:textColor="@color/sikad_green_dark"
+                android:textSize="@dimen/body_text_size"
+                android:textStyle="bold"
+                android:layout_marginBottom="@dimen/margin_small" />
+
+            <TextView
+                android:id="@+id/emailText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="user@example.com"
+                android:textSize="@dimen/body_text_size"
+                android:textColor="@color/textPrimary"
+                android:layout_marginBottom="@dimen/margin_medium"
+                android:background="@drawable/rounded_background_white"
+                android:padding="@dimen/margin_medium"
+                android:gravity="center" />
+
+            <!-- Status Message -->
+            <TextView
+                android:id="@+id/statusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Please check your email and click the verification link to continue"
+                android:textSize="@dimen/small_text_size"
+                android:textColor="@color/sikad_green"
+                android:layout_marginBottom="@dimen/margin_large"
+                android:gravity="center"
+                android:padding="@dimen/margin_medium"
+                android:background="@drawable/rounded_background_light_blue" />
+
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- Action Buttons -->
+    <LinearLayout
+        android:id="@+id/actionButtons"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="@dimen/margin_large"
+        app:layout_constraintStart_toStartOf="@id/startGuide"
+        app:layout_constraintEnd_toEndOf="@id/endGuide"
+        app:layout_constraintTop_toBottomOf="@+id/mainContentCard">
+
+        <!-- Check Verification Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/verifyButton"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/button_height"
+            android:layout_marginBottom="@dimen/margin_medium"
+            android:backgroundTint="@color/sikad_green"
+            android:text="Check Verification"
+            android:textColor="@color/white"
+            android:textSize="@dimen/body_text_size"
+            android:textStyle="bold"
+            app:cornerRadius="@dimen/input_corner_radius"
+            app:elevation="@dimen/card_elevation" />
+
+        <!-- Resend Email Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/resendButton"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/button_height"
+            android:layout_marginBottom="@dimen/margin_medium"
+            android:backgroundTint="@android:color/transparent"
+            android:text="Resend Verification Email"
+            android:textColor="@color/sikad_green"
+            android:textSize="@dimen/body_text_size"
+            android:textStyle="bold"
+            app:cornerRadius="@dimen/input_corner_radius"
+            app:strokeColor="@color/sikad_green"
+            app:strokeWidth="2dp" />
+
+    </LinearLayout>
+
+    <!-- Back to Login Link -->
+    <TextView
+        android:id="@+id/backToLoginButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/margin_large"
+        android:text="Back to Login"
+        android:textSize="@dimen/small_text_size"
+        android:textColor="@color/textSecondary"
+        android:background="@android:color/transparent"
+        android:padding="@dimen/margin_small"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/actionButtons" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
