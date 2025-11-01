@@ -149,7 +149,7 @@
                     android:id="@+id/btn45Minutes"
                     android:layout_width="match_parent"
                     android:layout_height="64dp"
-                    android:text="Cruise"
+                    android:text="Cruise Ride"
                     android:textSize="18sp"
                     android:textStyle="bold"
                     android:textColor="@android:color/white"
@@ -253,7 +253,7 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="Cruise: Ideal for leisurely rides and exploring (45 minutes)"
+                            android:text="Cruise Ride: Ideal for leisurely rides and exploring (45 minutes)"
                             android:textColor="@color/textPrimary"
                             android:textSize="14sp"
                             android:lineSpacingExtra="2dp" />

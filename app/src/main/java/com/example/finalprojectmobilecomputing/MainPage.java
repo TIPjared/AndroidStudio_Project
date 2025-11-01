@@ -639,7 +639,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         locationCard.setVisibility(View.VISIBLE);     // keep card visible
         stopButton.setVisibility(View.GONE);
         payButton.setVisibility(View.VISIBLE);
-        payButton.setText("Pay Now");
+        payButton.setText("Pay & Unlock");
 
 
         showCompletionDialog();
@@ -781,7 +781,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             startRideService();
             } else {
             // Show Pay Now button
-                payButton.setText("Pay Now");
+                payButton.setText("Pay & Unlock");
                 payButton.setVisibility(View.VISIBLE);
             payButton.setBackgroundTintList(getResources().getColorStateList(android.R.color.holo_green_dark));
             payButton.setTextColor(getResources().getColor(android.R.color.white));
@@ -1162,7 +1162,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
 
     private void resetRideUI() {
-        payButton.setText("Pay Now");
+        payButton.setText("Pay & Unlock");
         payButton.setVisibility(View.VISIBLE);
         stopButton.setVisibility(View.GONE);
 
