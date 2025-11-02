@@ -322,20 +322,20 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 if (currentLocation != null && activeGeofencePoints != null && !activeGeofencePoints.isEmpty()) {
 
                     // 🚫 GEOFENCE CHECK — COMMENTED OUT TO BYPASS LOCATION RESTRICTION
-//            boolean isInside = PolyUtil.containsLocation(
-//                    new LatLng(currentLocation.latitude, currentLocation.longitude),
-//                    activeGeofencePoints,
-//                    true
-//            );
-//
-//            if (isInside) {
+            boolean isInside = PolyUtil.containsLocation(
+                    new LatLng(currentLocation.latitude, currentLocation.longitude),
+                    activeGeofencePoints,
+                    true
+            );
+
+            if (isInside) {
                     // ✅ Bypass geofence — always allow starting the ride
                     Intent intent = new Intent(MainPage.this, RideDurationActivity.class);
                     startActivity(intent);
-//            } else {
-//                // 🚫 Normally blocks starting outside the geofence
-//                Toast.makeText(this, "You must be inside Antel Grand Village to start a ride.", Toast.LENGTH_SHORT).show();
-//            }
+            } else {
+                // 🚫 Normally blocks starting outside the geofence
+                Toast.makeText(this, "You must be inside Antel Grand Village to start a ride.", Toast.LENGTH_SHORT).show();
+            }
 
                 } else {
                     if (currentLocation != null && userMarker == null) {
