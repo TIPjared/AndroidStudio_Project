@@ -66,6 +66,9 @@ public class PaymentActivity extends AppCompatActivity {
 
         OkHttpClient baseClient = new OkHttpClient.Builder()
                 .addInterceptor(interceptor)
+                .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                .writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
                 .build();
 
         // Retrofit for your backend server

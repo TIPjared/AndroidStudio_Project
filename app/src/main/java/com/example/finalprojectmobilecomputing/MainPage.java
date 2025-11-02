@@ -321,23 +321,23 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             } else {
                 if (currentLocation != null && activeGeofencePoints != null && !activeGeofencePoints.isEmpty()) {
 
-                    boolean isInside = PolyUtil.containsLocation(
-                            new LatLng(currentLocation.latitude, currentLocation.longitude),
-                            activeGeofencePoints,
-                            true
-                    );
-
-                    if (isInside) {
-                        // ✅ Only allow access if inside geofence
-                        Intent intent = new Intent(MainPage.this, RideDurationActivity.class);
-                        startActivity(intent);
-                    } else {
-                        // 🚫 Show warning if outside area
-                        Toast.makeText(this, "You must be inside Antel Grand Village to start a ride.", Toast.LENGTH_SHORT).show();
-                    }
+                    // 🚫 GEOFENCE CHECK — COMMENTED OUT TO BYPASS LOCATION RESTRICTION
+//            boolean isInside = PolyUtil.containsLocation(
+//                    new LatLng(currentLocation.latitude, currentLocation.longitude),
+//                    activeGeofencePoints,
+//                    true
+//            );
+//
+//            if (isInside) {
+                    // ✅ Bypass geofence — always allow starting the ride
+                    Intent intent = new Intent(MainPage.this, RideDurationActivity.class);
+                    startActivity(intent);
+//            } else {
+//                // 🚫 Normally blocks starting outside the geofence
+//                Toast.makeText(this, "You must be inside Antel Grand Village to start a ride.", Toast.LENGTH_SHORT).show();
+//            }
 
                 } else {
-                    // ⚠️ Location not yet available
                     if (currentLocation != null && userMarker == null) {
                         createUserMarker();
                     }
@@ -345,6 +345,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 }
             }
         });
+
 
 
 

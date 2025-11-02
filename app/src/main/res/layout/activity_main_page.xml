@@ -123,7 +123,7 @@
             android:id="@+id/payButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="Pay & Unlock"
+            android:text="Pay and Unlock"
             android:layout_marginHorizontal="20dp"
             android:layout_marginBottom="80dp"
             android:backgroundTint="#2E7D32"
