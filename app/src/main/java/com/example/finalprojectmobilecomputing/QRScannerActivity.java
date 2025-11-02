@@ -1,7 +1,5 @@
 package com.example.finalprojectmobilecomputing;
 
-import static androidx.core.content.ContextCompat.startActivity;
-
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -21,15 +19,18 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
-import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.mlkit.vision.barcode.common.Barcode;
 import com.google.mlkit.vision.barcode.BarcodeScanner;
 import com.google.mlkit.vision.barcode.BarcodeScanning;
 import com.google.mlkit.vision.common.InputImage;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 public class QRScannerActivity extends AppCompatActivity {
@@ -44,7 +45,7 @@ public class QRScannerActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_qrscanner);
 
-        // Check and request camera permission
+        // Request camera permission if not granted
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
                 != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this,
@@ -105,9 +106,9 @@ public class QRScannerActivity extends AppCompatActivity {
                     })
                     .addOnFailureListener(e -> {
                         image.close();
-                        Toast.makeText(QRScannerActivity.this, 
-                            "Error processing image: " + e.getMessage(), 
-                            Toast.LENGTH_SHORT).show();
+                        Toast.makeText(QRScannerActivity.this,
+                                "Error processing image: " + e.getMessage(),
+                                Toast.LENGTH_SHORT).show();
                     });
         });
 
@@ -120,7 +121,6 @@ public class QRScannerActivity extends AppCompatActivity {
     }
 
     private void validateQR(String code) {
-        // First check if user is logged in
         FirebaseAuth auth = FirebaseAuth.getInstance();
         if (auth.getCurrentUser() == null) {
             Toast.makeText(this, "Please login first!", Toast.LENGTH_LONG).show();
@@ -128,66 +128,94 @@ public class QRScannerActivity extends AppCompatActivity {
             return;
         }
 
-        // Get Firestore instance
         FirebaseFirestore db = FirebaseFirestore.getInstance();
-        
-        // Show loading message
         Toast.makeText(this, "Checking QR code...", Toast.LENGTH_SHORT).show();
 
-        // Clean the QR code (remove any whitespace)
         String cleanCode = code.trim();
-
-        // Log the QR code being checked (for debugging)
         android.util.Log.d("QRScanner", "Checking QR code: " + cleanCode);
 
         db.collection("qr_codes")
-          .document(cleanCode)
-          .get()
-          .addOnSuccessListener(document -> {
-            if (document.exists()) {
-                // Log successful document retrieval
-                android.util.Log.d("QRScanner", "Document exists: " + document.getData());
+                .document(cleanCode)
+                .get()
+                .addOnSuccessListener(document -> {
+                    if (document.exists()) {
+                        String bikeId = document.getString("bike_id");
+                        Boolean isActive = document.getBoolean("isActive");
+                        String status = document.getString("status");
+                        String rentedBy = document.getString("rentedBy");
+                        Timestamp lockedAt = document.getTimestamp("lockedAt");
 
-                String bikeId = document.getString("bike_id");
-                Boolean isActive = document.getBoolean("isActive");
-                String status = document.getString("status");
+                        String currentUserId = auth.getCurrentUser().getUid();
 
-                String currentUserId = auth.getCurrentUser().getUid();
+                        // 🔁 Auto-release if rented but no payment within 5 minutes
+                        Timestamp reservedAt = document.getTimestamp("reserved_at");
+                        if ("rented".equals(status) && rentedBy != null) {
+                            if (reservedAt != null) {
+                                long minutesSinceReserved = (System.currentTimeMillis() - reservedAt.toDate().getTime()) / 60000;
+                                if (minutesSinceReserved > 5) {
+                                    Map<String, Object> reset = new HashMap<>();
+                                    reset.put("status", "locked");
+                                    reset.put("rentedBy", null);
+                                    reset.put("reserved_at", null);
+                                    db.collection("qr_codes").document(cleanCode).update(reset);
+                                    status = "locked";
+                                    rentedBy = null;
+                                    android.util.Log.d("QRScanner", "Bike auto-reset after 5 minutes without payment");
+                                }
+                            }
+                        }
 
-                // Log the retrieved data
-                android.util.Log.d("QRScanner", String.format(
-                    "Retrieved data - bikeId: %s, isActive: %s, status: %s, userId: %s",
-                    bikeId, isActive, status, currentUserId
-                ));
+                        // 🔒 Block if rented by someone else
+                        if ("locked".equals(status) && rentedBy != null && !rentedBy.equals(currentUserId)) {
+                            Toast.makeText(this, "Bike is already rented by another user!", Toast.LENGTH_LONG).show();
+                            isScanned = false;
+                            return;
+                        }
 
-                // Save to AppData singleton
-                AppData.getInstance().setQrCode(cleanCode);
-                AppData.getInstance().setUserId(currentUserId);
-                AppData.getInstance().setBikeId(bikeId);
+                        // ✅ Lock for current user
+                        if ("available".equals(status) || rentedBy == null) {
+                            Map<String, Object> updates = new HashMap<>();
+                            updates.put("status", "locked");
+                            updates.put("isActive", true);
+                            updates.put("rentedBy", currentUserId);
+                            updates.put("lockedAt", FieldValue.serverTimestamp());
+                            updates.put("reserved_at", FieldValue.serverTimestamp());
 
-                Intent i = new Intent(QRScannerActivity.this, PaymentActivity.class);
-                i.putExtra("qr_code", cleanCode);
-                i.putExtra("user_id", currentUserId);
-                i.putExtra("isActive", isActive != null ? isActive : false);
-                i.putExtra("status", status);
-                i.putExtra("bike_id", bikeId);
+                            db.collection("qr_codes")
+                                    .document(cleanCode)
+                                    .update(updates)
+                                    .addOnSuccessListener(aVoid -> {
+                                        AppData.getInstance().setQrCode(cleanCode);
+                                        AppData.getInstance().setUserId(currentUserId);
+                                        AppData.getInstance().setBikeId(bikeId);
 
-                startActivity(i);
-                finish();
-            } else {
-                android.util.Log.e("QRScanner", "Document does not exist for code: " + cleanCode);
-                Toast.makeText(this, "Invalid QR Code! Please try a different one.", Toast.LENGTH_LONG).show();
-                isScanned = false;
-            }
-        })
-        .addOnFailureListener(e -> {
-            // Log the detailed error
-            android.util.Log.e("QRScanner", "Error checking QR code: " + e.getMessage(), e);
-            Toast.makeText(this, 
-                "Connection error! Please check your internet connection and try again.", 
-                Toast.LENGTH_LONG).show();
-            isScanned = false;
-        });
+                                        Intent i = new Intent(QRScannerActivity.this, PaymentActivity.class);
+                                        i.putExtra("qr_code", cleanCode);
+                                        i.putExtra("user_id", currentUserId);
+                                        i.putExtra("isActive", true);
+                                        i.putExtra("status", "locked");
+                                        i.putExtra("bike_id", bikeId);
+
+                                        startActivity(i);
+                                        finish();
+                                    })
+                                    .addOnFailureListener(e -> {
+                                        Toast.makeText(this, "Failed to lock bike: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                                        isScanned = false;
+                                    });
+                        } else {
+                            Toast.makeText(this, "Invalid or unavailable bike!", Toast.LENGTH_LONG).show();
+                            isScanned = false;
+                        }
+                    } else {
+                        Toast.makeText(this, "Invalid QR Code! Please try again.", Toast.LENGTH_LONG).show();
+                        isScanned = false;
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    Toast.makeText(this, "Connection error! Please check your internet.", Toast.LENGTH_LONG).show();
+                    isScanned = false;
+                });
     }
 
     @Override

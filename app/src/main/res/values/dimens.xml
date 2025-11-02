@@ -9,7 +9,9 @@
     <dimen name="subtitle_text_size">20sp</dimen>
     <dimen name="body_text_size">16sp</dimen>
     <dimen name="small_text_size">14sp</dimen>
-    
+    <dimen name="caption_text_size">13sp</dimen>
+    <dimen name="button_height_small">42dp</dimen>
+
     <!-- Margins and padding -->
     <dimen name="margin_small">8dp</dimen>
     <dimen name="margin_medium">16dp</dimen>

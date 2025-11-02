@@ -153,8 +153,16 @@ public class OTPVerification extends AppCompatActivity {
                         }
                     },
                     error -> {
-                        Toast.makeText(this, "Server error: " + error.getMessage(), Toast.LENGTH_SHORT).show();
-                        setResendButtonEnabled(true);
+                        if (error.networkResponse == null) {
+                            Toast.makeText(this, "Server is waking up... please wait a moment.", Toast.LENGTH_SHORT).show();
+
+                            // Auto-retry after 3 seconds if first attempt failed (Render cold start)
+                            new android.os.Handler().postDelayed(this::sendInitialOtp, 3000);
+                        } else {
+                            int code = error.networkResponse.statusCode;
+                            Log.e("OTP", "Server responded with " + code);
+                            Toast.makeText(this, "Server error (" + code + "). Please try again.", Toast.LENGTH_SHORT).show();
+                        }
                     }
             );
 
@@ -310,7 +318,12 @@ public class OTPVerification extends AppCompatActivity {
                         }
                     },
                     error -> {
-                        Toast.makeText(this, "Server error: " + error.getMessage(), Toast.LENGTH_SHORT).show();
+                        if (error.networkResponse != null) {
+                            int statusCode = error.networkResponse.statusCode;
+                        } else {
+                            Log.e("OTP", "Volley network error: " + error.toString());
+                            Toast.makeText(this, "Unable to reach server. Please try again later.", Toast.LENGTH_SHORT).show();
+                        }
                     }
             );
 

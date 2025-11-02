@@ -1225,6 +1225,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         // Ensure user marker is created if location is already available
         if (currentLocation != null && userMarker == null) {
             createUserMarker();
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 16f));
         }
         
         // Add a delayed check to ensure user marker appears even if location takes time
@@ -1232,6 +1233,9 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             if (userMarker == null && currentLocation != null) {
                 Log.d("MainPage", "Creating delayed user marker");
                 createUserMarker();
+
+                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 16f));
+
             }
         }, 2000); // 2 second delay
     }

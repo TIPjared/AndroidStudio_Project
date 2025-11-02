@@ -4,8 +4,12 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -57,8 +61,48 @@ public class PaymentActivity extends AppCompatActivity {
             return;
         }
 
-        // Derive bikeId from qrCode (e.g. bike_001_qr → bike_00    1)
+        // Derive bikeId from qrCode (e.g. bike_001_qr → bike_001)
         String bikeId = qrCode.split("_qr")[0];
+
+        // ✅ Firestore check before payment
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
+        db.collection("qr_codes").document(qrCode).get()
+                .addOnSuccessListener(doc -> {
+                    if (!doc.exists()) {
+                        Log.e("PAYMENT", "Invalid QR code");
+                        Toast.makeText(this, "Invalid QR Code!", Toast.LENGTH_SHORT).show();
+                        finish();
+                        return;
+                    }
+
+                    Boolean isActive = doc.getBoolean("isActive");
+                    String status = doc.getString("status");
+                    String rentedBy = doc.getString("rentedBy");
+
+                    FirebaseAuth auth = FirebaseAuth.getInstance();
+                    String currentUserId = auth.getCurrentUser().getUid();
+
+                    // 🚫 If bike already rented by someone else
+                    if (status != null && status.equals("rented") &&
+                            rentedBy != null && !rentedBy.equals(currentUserId)) {
+                        Toast.makeText(this, "This bike is already rented by another user!", Toast.LENGTH_LONG).show();
+                        finish();
+                        return;
+                    }
+
+                    // ✅ If available, proceed to your existing PayMongo flow
+                    proceedToPayment(bikeId, qrCode, currentUserId, rideTime, amount);
+
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("PAYMENT", "Error checking bike status", e);
+                    Toast.makeText(this, "Connection error. Try again.", Toast.LENGTH_LONG).show();
+                    finish();
+                });
+    }
+
+    // ✅ Your full PayMongo logic moved here safely
+    private void proceedToPayment(String bikeId, String qrCode, String userId, String rideTime, String amount) {
 
         // Build logging client
         HttpLoggingInterceptor interceptor = new HttpLoggingInterceptor();
@@ -88,7 +132,7 @@ public class PaymentActivity extends AppCompatActivity {
                     String token = (String) response.body().get("token");
                     Log.d("PAYMENT", "Got token: " + token);
 
-                    // Step 2: Proceed with PayMongo flow (same as your working code)
+                    // Step 2: Proceed with PayMongo flow
                     OkHttpClient client = new OkHttpClient.Builder()
                             .addInterceptor(chain -> {
                                 String credential = Credentials.basic("pk_test_T53JbiXQ5r1FN3LNj1pu13t5", "");
@@ -107,7 +151,7 @@ public class PaymentActivity extends AppCompatActivity {
 
                     PayMongoApi api = retrofit.create(PayMongoApi.class);
 
-                    // Determine payment amount based on ride time
+                    // Determine payment amount
                     int amountCentavos;
                     switch (rideTime) {
                         case "30 minutes":
@@ -126,11 +170,11 @@ public class PaymentActivity extends AppCompatActivity {
 
                     // Create source body for GCash payment
                     Map<String, Object> attributes = new HashMap<>();
-                    attributes.put("amount", amountCentavos); // ₱100.00 in centavos
+                    attributes.put("amount", amountCentavos);
                     attributes.put("type", "gcash");
                     attributes.put("currency", "PHP");
 
-                    // Redirect URLs now include bikeId, qrCode, userId, and token
+                    // Redirect URLs include session info
                     Map<String, String> redirect = new HashMap<>();
                     redirect.put("success",
                             "https://sikad-server.onrender.com/success" +
@@ -167,6 +211,21 @@ public class PaymentActivity extends AppCompatActivity {
 
                                     // Redirect to PayMongo's checkout URL for GCash payment
                                     startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(checkoutUrl)));
+                                    new android.os.Handler().postDelayed(() -> {
+                                        FirebaseFirestore db = FirebaseFirestore.getInstance();
+                                        Map<String, Object> reset = new HashMap<>();
+                                        reset.put("status", "available");
+                                        reset.put("isActive", false);
+                                        reset.put("rentedBy", null);
+                                        reset.put("lockedAt", null);
+
+                                        db.collection("qr_codes").document(qrCode)
+                                                .update(reset)
+                                                .addOnSuccessListener(aVoid ->
+                                                        Log.d("PAYMENT", "Bike reset after payment timeout"))
+                                                .addOnFailureListener(e ->
+                                                        Log.e("PAYMENT", "Error resetting bike: " + e.getMessage()));
+                                    }, 15000); // 15 seconds delay
                                     finish();
                                 } catch (Exception e) {
                                     Log.e("PAYMENT", "Parse error", e);
@@ -190,6 +249,8 @@ public class PaymentActivity extends AppCompatActivity {
             public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                 Log.e("PAYMENT", "Server Network failure", t);
             }
+
+
         });
     }
 }
