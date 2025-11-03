@@ -58,6 +58,8 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String SERVER_URL = "https://philsms-otp-server.onrender.com/send-otp";
 
+    private static final String SERVER_PING_URL = "https://philsms-otp-server.onrender.com/";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -69,6 +71,8 @@ public class MainActivity extends AppCompatActivity {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
+
+        pingServer();
 
         startLoginAnimations();
 
@@ -217,7 +221,15 @@ public class MainActivity extends AppCompatActivity {
                             finish();
                             return;
                         }
-                        
+
+                        Boolean isGoogleUser = document.getBoolean("isGoogleUser");
+                        if (isGoogleUser != null && isGoogleUser) {
+                            // Google user → skip OTP completely
+                            startActivity(new Intent(MainActivity.this, MainPage.class));
+                            finish();
+                            return;
+                        }
+
                         Boolean phoneVerified = document.getBoolean("phoneVerified");
                         String savedDeviceId = document.getString("deviceId");
                         String phoneNumber = document.contains("phone") ? document.getString("phone") : "";
@@ -391,4 +403,18 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
     }
+
+    private void pingServer() {
+        RequestQueue queue = Volley.newRequestQueue(this);
+        JsonObjectRequest pingRequest = new JsonObjectRequest(
+                Request.Method.GET,
+                SERVER_PING_URL,
+                null,
+                response -> Log.d("ServerPing", "Server is awake and responding."),
+                error -> Log.w("ServerPing", "Server still waking up... (Render cold start)")
+        );
+        queue.add(pingRequest);
+    }
+
 }
+
