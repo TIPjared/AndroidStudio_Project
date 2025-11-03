@@ -156,13 +156,13 @@ public class SignUpActivity extends AppCompatActivity {
         String password = passwordEditText.getText().toString().trim();
         String confirmPassword = confirmPasswordEditText.getText().toString().trim();
         String phoneInput = phoneEditText.getText().toString().trim();
-        
+
         // Validate phone number format
         if (email.isEmpty() || password.isEmpty() || confirmPassword.isEmpty() || phoneInput.isEmpty()) {
             Toast.makeText(SignUpActivity.this, "Please fill in all fields", Toast.LENGTH_SHORT).show();
             return;
         }
-        
+
         // Validate Philippine phone format (must start with 09 and be 11 digits)
         if (!phoneInput.startsWith("09") || phoneInput.length() != 11) {
             Toast.makeText(SignUpActivity.this, "Phone number must start with 09 and be 11 digits (e.g., 09171234567)", Toast.LENGTH_LONG).show();
@@ -170,7 +170,7 @@ public class SignUpActivity extends AppCompatActivity {
             phoneEditText.requestFocus();
             return;
         }
-        
+
         // Convert to international format for Firebase
         final String phone = "+63" + phoneInput.substring(1);
 
@@ -277,16 +277,17 @@ public class SignUpActivity extends AppCompatActivity {
                         newUser.put("phoneVerified", false);
                         newUser.put("emailVerified", true); // Google accounts are pre-verified
                         newUser.put("accountStatus", "ACTIVE");
+                        newUser.put("isGoogleUser", true);
                         newUser.put("name", "");
                         newUser.put("birthdate", "");
                         newUser.put("gender", "");
                         newUser.put("profileImageUrl", "");
                         newUser.put("createdAt", System.currentTimeMillis());
-                        
+
                         db.collection("users").document(userId).set(newUser)
                                 .addOnSuccessListener(aVoid -> {
                                     // Navigate to OTP verification to collect phone number
-                                    Intent intent = new Intent(SignUpActivity.this, OTPVerification.class);
+                                    Intent intent = new Intent(SignUpActivity.this, MainPage.class);
                                     startActivity(intent);
                                     finish();
                                 })
@@ -306,14 +307,14 @@ public class SignUpActivity extends AppCompatActivity {
                     .addOnCompleteListener(task -> {
                         if (task.isSuccessful()) {
                             Toast.makeText(SignUpActivity.this, "Account created! Please check your email to verify your account.", Toast.LENGTH_LONG).show();
-                            
+
                             // Navigate to email verification activity
                             Intent intent = new Intent(SignUpActivity.this, EmailVerificationActivity.class);
                             startActivity(intent);
                             finish();
                         } else {
                             Toast.makeText(SignUpActivity.this, "Failed to send verification email: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
-                            
+
                             // Still navigate to email verification activity
                             Intent intent = new Intent(SignUpActivity.this, EmailVerificationActivity.class);
                             startActivity(intent);

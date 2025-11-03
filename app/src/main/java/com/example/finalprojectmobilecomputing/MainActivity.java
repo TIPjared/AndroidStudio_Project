@@ -221,7 +221,15 @@ public class MainActivity extends AppCompatActivity {
                             finish();
                             return;
                         }
-                        
+
+                        Boolean isGoogleUser = document.getBoolean("isGoogleUser");
+                        if (isGoogleUser != null && isGoogleUser) {
+                            // Google user → skip OTP completely
+                            startActivity(new Intent(MainActivity.this, MainPage.class));
+                            finish();
+                            return;
+                        }
+
                         Boolean phoneVerified = document.getBoolean("phoneVerified");
                         String savedDeviceId = document.getString("deviceId");
                         String phoneNumber = document.contains("phone") ? document.getString("phone") : "";
