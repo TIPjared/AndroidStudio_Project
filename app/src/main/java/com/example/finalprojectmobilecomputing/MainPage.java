@@ -82,6 +82,8 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.cardview.widget.CardView;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
@@ -117,6 +119,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import android.os.Handler;
 import android.os.Looper;
 
@@ -126,9 +130,15 @@ import com.google.android.gms.location.GeofencingClient;
 public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
 
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
+    // Antel Grand Village coordinates (default zoom location)
+    private static final LatLng ANTEL_GRAND_VILLAGE = new LatLng(14.406264, 120.889464);
+    private static final float DEFAULT_ZOOM_LEVEL = 15f; // Reduced from 17f to show geofence better
+    
     private boolean isPhoneVisible = false;
     private String originalPhoneNumber = "";
     private GoogleMap mMap;
+    private boolean mapMovedOnce = false; // Prevent redundant camera updates
+    private boolean permissionsRequested = false; // Track if permissions have been requested
     private FusedLocationProviderClient fusedLocationClient;
     private LatLng currentLocation;
     private Marker bikeMarker; // This will be the rented bike marker
@@ -183,6 +193,22 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     // Bike status tracking variables
     private com.google.firebase.database.ValueEventListener bikeListener;
     private com.google.firebase.database.DatabaseReference bikeStatusRef;
+    
+    // Firebase listener references for cleanup
+    private com.google.firebase.database.ChildEventListener bikesChildEventListener;
+    private com.google.firebase.database.ValueEventListener rentedBikeListener;
+    private DatabaseReference rentedBikeRef;
+    
+    // Marker update optimization
+    private Handler markerUpdateHandler = new Handler(Looper.getMainLooper());
+    private Runnable markerUpdateRunnable;
+    private Map<String, com.google.firebase.database.DataSnapshot> pendingMarkerUpdates = new HashMap<>();
+    
+    // Location permission launcher (modern API)
+    private ActivityResultLauncher<String[]> locationPermissionLauncher;
+    private SharedPreferences sharedPreferences;
+    private static final String PREFS_NAME = "MainPagePrefs";
+    private static final String KEY_PERMISSION_GRANTED_ONCE = "permission_granted_once";
 
     // Emergency alert system
     private EmergencyAlertDialog emergencyAlert;
@@ -205,6 +231,38 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         fusedLocationClient     = LocationServices.getFusedLocationProviderClient(this);
         geofencingClient        = LocationServices.getGeofencingClient(this);
         rideStateManager        = RideStateManager.getInstance(this);
+        sharedPreferences       = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        
+        // Initialize location permission launcher (modern API)
+        locationPermissionLauncher = registerForActivityResult(
+            new ActivityResultContracts.RequestMultiplePermissions(),
+            result -> {
+                boolean allGranted = true;
+                for (Boolean granted : result.values()) {
+                    if (!granted) {
+                        allGranted = false;
+                        break;
+                    }
+                }
+                if (allGranted) {
+                    // Permission granted - save flag and enable location immediately
+                    sharedPreferences.edit().putBoolean(KEY_PERMISSION_GRANTED_ONCE, true).apply();
+                    enableMyLocation();
+                    // Create user marker immediately after permission granted
+                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                        if (currentLocation != null && userMarker == null) {
+                            createUserMarker();
+                            Log.d("MainPage", "User marker created immediately after permission grant");
+                        }
+                    }, 500); // Small delay to ensure location is ready
+                    Log.d("MainPage", "Location permission granted via ActivityResultLauncher");
+                } else {
+                    // Still try to enable location (may have partial permission)
+                    enableMyLocation();
+                    Toast.makeText(this, "Location permission is needed for full functionality", Toast.LENGTH_SHORT).show();
+                }
+            }
+        );
 
         drawerLayout            = findViewById(R.id.drawerLayout);
         menuButton              = findViewById(R.id.menuButton);
@@ -273,25 +331,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             return true;
         });
 
-        // Asking for Notifications
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
-                    != PackageManager.PERMISSION_GRANTED) {
-
-                ActivityCompat.requestPermissions(this,
-                        new String[]{android.Manifest.permission.POST_NOTIFICATIONS},
-                        101); // 101 is the request code
-            }
-        }
-
-        //Location Permissions
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                    Manifest.permission.ACCESS_BACKGROUND_LOCATION
-            }, 1001);
-        }
+        // Permissions will be requested after splash screen completes (in onMapReady)
 
         // Find the header view from the NavigationView
         View headerView = navigationView.getHeaderView(0);
@@ -441,8 +481,8 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         // --- Setup broadcast receiver for ride updates from service ---
         setupRideUpdateReceiver();
         
-        // --- Restore ride state if there's an active ride ---
-        restoreRideState();
+        // --- Restore ride state will be called after map is ready ---
+        // restoreRideState() is now called in onMapReady() to ensure map is ready first
     }
     
     /**
@@ -1207,13 +1247,24 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     public void onMapReady(GoogleMap googleMap) {
 
         mMap = googleMap;
-        requestLocationPermission();
-
+        
+        // Auto-zoom to Antel Grand Village first (before location permission)
+        zoomToAntelGrandVillage();
+        
         // Draw Geofence
         loadActiveGeofenceFromFirestore();
 
         // Load all available bikes on map
         loadAllBikes();
+        
+        // Restore ride state now that map is ready
+        restoreRideState();
+        
+        // Request all permissions after splash screen completes (give app time to prepare)
+        // Delay ensures splash screen has finished and app is ready
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            requestAllPermissions();
+        }, 500); // 500ms delay after splash to ensure everything is ready
 
         // Remove any "destination" logic (markers are just visual now)
         mMap.setOnMarkerClickListener(marker -> {
@@ -1225,7 +1276,11 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         // Ensure user marker is created if location is already available
         if (currentLocation != null && userMarker == null) {
             createUserMarker();
-            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 16f));
+            // Only move camera once if not already moved
+            if (!mapMovedOnce) {
+                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, DEFAULT_ZOOM_LEVEL));
+                mapMovedOnce = true;
+            }
         }
         
         // Add a delayed check to ensure user marker appears even if location takes time
@@ -1233,9 +1288,11 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             if (userMarker == null && currentLocation != null) {
                 Log.d("MainPage", "Creating delayed user marker");
                 createUserMarker();
-
-                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 16f));
-
+                // Only move camera once if not already moved
+                if (!mapMovedOnce) {
+                    mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, DEFAULT_ZOOM_LEVEL));
+                    mapMovedOnce = true;
+                }
             }
         }, 2000); // 2 second delay
     }
@@ -1268,6 +1325,9 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                                     .addAll(activeGeofencePoints)
                                     .strokeColor(Color.parseColor(colorCode))
                                     .fillColor(ColorUtils.setAlphaComponent(Color.parseColor(colorCode), 80)));
+
+                            // Zoom to fit geofence perfectly on screen with padding
+                            zoomToFitGeofence();
 
                             // Add geofences dynamically
                             // for (LatLng latLng : activeGeofencePoints) {
@@ -1306,17 +1366,99 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         }
     }
 
+    /**
+     * Request all permissions (location and notifications) after splash screen
+     */
+    private void requestAllPermissions() {
+        // Only request permissions once
+        if (permissionsRequested) {
+            Log.d("MainPage", "Permissions already requested, skipping");
+            return;
+        }
+        
+        permissionsRequested = true;
+        Log.d("MainPage", "Requesting all permissions after splash screen");
+        
+        // Request notification permission first (Android 13+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{android.Manifest.permission.POST_NOTIFICATIONS},
+                        101);
+                Log.d("MainPage", "Notification permission requested");
+            }
+        }
+        
+        // Request location permission using modern ActivityResultLauncher
+        requestLocationPermission();
+    }
+    
+    /**
+     * Request location permission using modern ActivityResultLauncher
+     */
     private void requestLocationPermission() {
+        // Check if permission was already granted once (skip asking again)
+        boolean permissionGrantedOnce = sharedPreferences.getBoolean(KEY_PERMISSION_GRANTED_ONCE, false);
+        
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED
-        ) {
-            ActivityCompat.requestPermissions(
-                    this,
-                    new String[]{ Manifest.permission.ACCESS_FINE_LOCATION },
-                    LOCATION_PERMISSION_REQUEST_CODE
-            );
+                != PackageManager.PERMISSION_GRANTED) {
+            // Use modern API if permission not granted - request immediately
+            locationPermissionLauncher.launch(new String[]{
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            });
         } else {
+            // Permission already granted - enable location immediately
+            if (!permissionGrantedOnce) {
+                sharedPreferences.edit().putBoolean(KEY_PERMISSION_GRANTED_ONCE, true).apply();
+            }
             enableMyLocation();
+            // Create user marker immediately if location available
+            if (currentLocation != null && userMarker == null) {
+                createUserMarker();
+            }
+        }
+    }
+    
+    /**
+     * Auto-zoom to Antel Grand Village (default location)
+     */
+    private void zoomToAntelGrandVillage() {
+        if (mMap != null && !mapMovedOnce) {
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(ANTEL_GRAND_VILLAGE, DEFAULT_ZOOM_LEVEL));
+            mapMovedOnce = true;
+            Log.d("MainPage", "Auto-zoomed to Antel Grand Village");
+        }
+    }
+    
+    /**
+     * Zoom to fit geofence perfectly on screen with padding
+     */
+    private void zoomToFitGeofence() {
+        if (mMap == null || activeGeofencePoints == null || activeGeofencePoints.isEmpty()) {
+            return;
+        }
+        
+        // Calculate bounds from geofence points
+        LatLngBounds.Builder builder = new LatLngBounds.Builder();
+        for (LatLng point : activeGeofencePoints) {
+            builder.include(point);
+        }
+        
+        try {
+            LatLngBounds bounds = builder.build();
+            // Zoom to fit geofence with padding (100dp padding around edges)
+            mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 150)); // 150dp padding for perfect fit
+            mapMovedOnce = true;
+            Log.d("MainPage", "Zoomed to fit geofence perfectly");
+        } catch (Exception e) {
+            // Fallback to default zoom if bounds calculation fails
+            Log.e("MainPage", "Error calculating geofence bounds, using default zoom", e);
+            if (!mapMovedOnce) {
+                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(ANTEL_GRAND_VILLAGE, DEFAULT_ZOOM_LEVEL));
+                mapMovedOnce = true;
+            }
         }
     }
 
@@ -1388,8 +1530,11 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                             .color(Color.BLUE)
                             .width(10));
 
-                    // Move camera to follow the bike
-                    mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 18f));
+                    // Move camera to follow the bike (only if ride is active and camera not already moved once)
+                    if (transactionAuthorized && !mapMovedOnce) {
+                        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 18f));
+                        mapMovedOnce = true;
+                    }
                 }
             }
         };
@@ -1415,10 +1560,18 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 .addOnSuccessListener(loc -> {
                     if (loc != null) {
                         currentLocation = new LatLng(loc.getLatitude(), loc.getLongitude());
-                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
+                        
+                        // Only move camera if not already moved to Antel Grand Village
+                        if (!mapMovedOnce) {
+                            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, DEFAULT_ZOOM_LEVEL));
+                            mapMovedOnce = true;
+                        }
                         
                         // Create user marker immediately when location is available
-                        createUserMarker();
+                        if (userMarker == null) {
+                            createUserMarker();
+                            Log.d("MainPage", "User marker created immediately when location obtained");
+                        }
                         
                         // Start continuous location updates
                         startLocationUpdates();
@@ -1429,9 +1582,12 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                         Log.w("MainPage", "Last location is null, starting location updates");
                         startLocationUpdates();
                         
-                        // Show a default location (Manila area) as fallback
-                        currentLocation = new LatLng(14.5995, 120.9842); // Manila coordinates
-                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
+                        // Show Antel Grand Village as default fallback (instead of Manila)
+                        currentLocation = ANTEL_GRAND_VILLAGE;
+                        if (!mapMovedOnce) {
+                            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, DEFAULT_ZOOM_LEVEL));
+                            mapMovedOnce = true;
+                        }
                         createUserMarker();
                     }
                 })
@@ -1440,9 +1596,12 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                     // Start location updates anyway as a fallback
                     startLocationUpdates();
                     
-                    // Show a default location (Manila area) as fallback
-                    currentLocation = new LatLng(14.5995, 120.9842); // Manila coordinates
-                    mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
+                    // Show Antel Grand Village as default fallback (instead of Manila)
+                    currentLocation = ANTEL_GRAND_VILLAGE;
+                    if (!mapMovedOnce) {
+                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, DEFAULT_ZOOM_LEVEL));
+                        mapMovedOnce = true;
+                    }
                     createUserMarker();
                 });
     }
@@ -1821,6 +1980,18 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         }
     }
 
+    /**
+     * Extract username from email (e.g., reeselzrd@gmail.com → reeselzrd)
+     */
+    public static String getUsernameFromEmail(String email) {
+        if (email == null || email.isEmpty()) return "User Name";
+        if (email.contains("@")) {
+            String username = email.split("@")[0];
+            return username.isEmpty() ? "User Name" : username;
+        }
+        return "User Name";
+    }
+    
     private void loadUserProfileData(View headerView) {
         TextView profileName = headerView.findViewById(R.id.profileName);
         TextView profileEmail = headerView.findViewById(R.id.profileEmail);
@@ -1834,10 +2005,15 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         
         if (currentUser != null && currentUser.getEmail() != null) {
             
+            // Extract username from email as fallback
+            String emailUsername = getUsernameFromEmail(currentUser.getEmail());
+            
             // Load cached data immediately for instant display
             if (dataLoaded) {
                 profileEmail.setText(cachedEmail);
-                profileName.setText(cachedUsername.isEmpty() ? "User Name" : cachedUsername);
+                // Use Firestore name if available, otherwise use email username, otherwise "User Name"
+                String displayName = cachedUsername.isEmpty() ? emailUsername : cachedUsername;
+                profileName.setText(displayName);
                 
                 // Set up phone number masking - convert to 09 format for display
                 originalPhoneNumber = formatPhoneForDisplay(cachedPhone);
@@ -1865,6 +2041,8 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                 // Set email from Firebase Auth immediately
                 cachedEmail = currentUser.getEmail();
                 profileEmail.setText(cachedEmail);
+                // Show email username immediately while loading Firestore data
+                profileName.setText(emailUsername);
             }
             
             // Only fetch from Firebase if we don't have cached data or need to refresh
@@ -1888,8 +2066,9 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
                             cachedProfileImageUrl = profileImageUrl != null ? profileImageUrl : "";
                             dataLoaded = true;
                             
-                            // Update UI with fresh data
-                            profileName.setText(cachedUsername.isEmpty() ? "User Name" : cachedUsername);
+                            // Update UI with fresh data - use Firestore name if available, otherwise email username
+                            String displayName = cachedUsername.isEmpty() ? emailUsername : cachedUsername;
+                            profileName.setText(displayName);
                             
                             // Set up phone masking for fresh data - convert to 09 format for display
                             originalPhoneNumber = formatPhoneForDisplay(cachedPhone);
@@ -2000,6 +2179,14 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     }
 
     @Override
+    protected void onPause() {
+        super.onPause();
+        
+        // Pause listeners to save resources (but keep them registered for onResume)
+        Log.d("MainPage", "onPause - pausing location updates");
+    }
+    
+    @Override
     protected void onDestroy() {
         super.onDestroy();
         
@@ -2013,10 +2200,38 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             }
         }
         
+        // Remove Firebase listeners to prevent memory leaks
         if (bikeListener != null && bikeStatusRef != null) {
             bikeStatusRef.removeEventListener(bikeListener);
             bikeListener = null;
             bikeStatusRef = null;
+            Log.d("MainPage", "Removed bike status listener");
+        }
+        
+        // Remove bikes child event listener
+        if (bikesChildEventListener != null && bikesRef != null) {
+            bikesRef.removeEventListener(bikesChildEventListener);
+            bikesChildEventListener = null;
+            Log.d("MainPage", "Removed bikes child event listener");
+        }
+        
+        // Remove rented bike listener
+        if (rentedBikeListener != null && rentedBikeRef != null) {
+            rentedBikeRef.removeEventListener(rentedBikeListener);
+            rentedBikeListener = null;
+            rentedBikeRef = null;
+            Log.d("MainPage", "Removed rented bike listener");
+        }
+        
+        // Cancel marker update debounce
+        if (markerUpdateRunnable != null) {
+            markerUpdateHandler.removeCallbacks(markerUpdateRunnable);
+        }
+        
+        // Stop location updates
+        if (locationCallback != null && fusedLocationClient != null) {
+            fusedLocationClient.removeLocationUpdates(locationCallback);
+            Log.d("MainPage", "Removed location updates");
         }
     }
 
@@ -2041,17 +2256,22 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
     private void loadAllBikes() {
         if (mMap == null) return;
 
+        // Remove existing listener if any (prevent duplicates)
+        if (bikesChildEventListener != null && bikesRef != null) {
+            bikesRef.removeEventListener(bikesChildEventListener);
+        }
+
         Log.d("BikeRental", "Setting up listener for all bikes...");
 
         // Use ChildEventListener for more granular updates
-        bikesRef.addChildEventListener(new com.google.firebase.database.ChildEventListener() {
+        bikesChildEventListener = new com.google.firebase.database.ChildEventListener() {
 
             // Called when a new bike is added
             @Override
             public void onChildAdded(@NonNull com.google.firebase.database.DataSnapshot bikeSnapshot, @Nullable String previousChildName) {
                 // Only process if no active rental
                 if (rentedBikeId == null) {
-                    updateOrAddBikeMarker(bikeSnapshot);
+                    debouncedUpdateMarker(bikeSnapshot);
                 }
             }
 
@@ -2060,7 +2280,7 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             public void onChildChanged(@NonNull com.google.firebase.database.DataSnapshot bikeSnapshot, @Nullable String previousChildName) {
                 // Only process if no active rental
                 if (rentedBikeId == null) {
-                    updateOrAddBikeMarker(bikeSnapshot);
+                    debouncedUpdateMarker(bikeSnapshot);
                 }
             }
 
@@ -2088,7 +2308,48 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             public void onCancelled(@NonNull com.google.firebase.database.DatabaseError error) {
                 Log.e("BikeRental", "Failed to load bikes: " + error.getMessage());
             }
-        });
+        };
+        
+        // Attach the listener to bikesRef
+        bikesRef.addChildEventListener(bikesChildEventListener);
+    }
+    
+    /**
+     * Debounced marker update to prevent rapid redraws while ensuring consistency
+     */
+    private void debouncedUpdateMarker(com.google.firebase.database.DataSnapshot bikeSnapshot) {
+        String bikeId = bikeSnapshot.getKey();
+        if (bikeId == null || mMap == null) return;
+        
+        // Always store the latest snapshot for each bike (ensures we use most recent data)
+        pendingMarkerUpdates.put(bikeId, bikeSnapshot);
+        
+        // Cancel existing debounce runnable
+        if (markerUpdateRunnable != null) {
+            markerUpdateHandler.removeCallbacks(markerUpdateRunnable);
+        }
+        
+        // Schedule update after debounce delay (300ms - shorter for better responsiveness)
+        markerUpdateRunnable = () -> {
+            if (mMap != null) {
+                // Process all pending updates - ensure consistency by processing on UI thread
+                runOnUiThread(() -> {
+                    // Copy snapshots to avoid concurrent modification
+                    Map<String, com.google.firebase.database.DataSnapshot> snapshotsToProcess = 
+                        new HashMap<>(pendingMarkerUpdates);
+                    pendingMarkerUpdates.clear();
+                    
+                    // Process each update
+                    for (com.google.firebase.database.DataSnapshot snapshot : snapshotsToProcess.values()) {
+                        updateOrAddBikeMarker(snapshot);
+                    }
+                    
+                    Log.d("BikeRental", "Processed " + snapshotsToProcess.size() + " bike marker updates");
+                });
+            }
+        };
+        
+        markerUpdateHandler.postDelayed(markerUpdateRunnable, 300); // 300ms debounce (shorter for better consistency)
     }
 
     private void updateOrAddBikeMarker(com.google.firebase.database.DataSnapshot bikeSnapshot) {
@@ -2224,6 +2485,14 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         rentedBikeId = null;
         rentedBikeLocation = null;
         
+        // Remove rented bike listener
+        if (rentedBikeListener != null && rentedBikeRef != null) {
+            rentedBikeRef.removeEventListener(rentedBikeListener);
+            rentedBikeListener = null;
+            rentedBikeRef = null;
+            Log.d("MainPage", "Removed rented bike listener in endRental");
+        }
+        
         // Show all bikes again
         loadAllBikes();
         
@@ -2245,10 +2514,15 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
      * @param bikeId The rented bike's ID
      */
     private void listenToRentedBikeGPS(String bikeId) {
-        // Listen to gpsData/bike_xxx/latest/
-        DatabaseReference rentedBikeRef = bikesRef.child(bikeId);
+        // Remove existing listener if any (prevent duplicates)
+        if (rentedBikeListener != null && rentedBikeRef != null) {
+            rentedBikeRef.removeEventListener(rentedBikeListener);
+        }
         
-        rentedBikeRef.addValueEventListener(new com.google.firebase.database.ValueEventListener() {
+        // Listen to gpsData/bike_xxx/latest/
+        rentedBikeRef = bikesRef.child(bikeId);
+        
+        rentedBikeListener = new com.google.firebase.database.ValueEventListener() {
             @Override
             public void onDataChange(@NonNull com.google.firebase.database.DataSnapshot snapshot) {
                 if (!transactionAuthorized || !bikeId.equals(rentedBikeId)) {
@@ -2321,7 +2595,10 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
             public void onCancelled(@NonNull com.google.firebase.database.DatabaseError error) {
                 Log.e("BikeRental", "Failed to get rented bike location: " + error.getMessage());
             }
-        });
+        };
+        
+        // Attach the listener
+        rentedBikeRef.addValueEventListener(rentedBikeListener);
     }
 
     private boolean isWithinGeofence(LatLng location) {
