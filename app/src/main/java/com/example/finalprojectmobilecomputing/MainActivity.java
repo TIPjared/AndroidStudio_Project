@@ -448,6 +448,7 @@ public class MainActivity extends AppCompatActivity {
         queue.add(pingRequest);
     }
 
+
     private String hashDeviceId(String deviceId) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

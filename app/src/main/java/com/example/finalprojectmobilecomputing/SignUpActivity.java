@@ -15,6 +15,10 @@ import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 import android.os.Handler;
 
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.toolbox.JsonObjectRequest;
+import com.android.volley.toolbox.Volley;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.auth.api.signin.GoogleSignInClient;
@@ -45,6 +49,7 @@ public class SignUpActivity extends AppCompatActivity {
     private View googleSignUpButton;
     private FirebaseAuth mAuth;
     private GoogleSignInClient mGoogleSignInClient;
+    private String SERVER_PING_URL;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,6 +67,9 @@ public class SignUpActivity extends AppCompatActivity {
             signUpButton = findViewById(R.id.signUpButton);
             goToLogin = findViewById(R.id.goToLogin);
             googleSignUpButton = findViewById(R.id.googleSignUpButton);
+
+            String baseUrl = getString(R.string.otp_server_url);
+            SERVER_PING_URL = baseUrl + "/";
 
             // Google Sign-In setup
             GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -184,6 +192,7 @@ public class SignUpActivity extends AppCompatActivity {
         } else if (!isStrongPassword(password)) {
             Toast.makeText(SignUpActivity.this, "Password must be at least 8 characters and include upper, lower, digit, and special character.", Toast.LENGTH_LONG).show();
         } else {
+
             FirebaseFirestore db = FirebaseFirestore.getInstance();
             db.collection("users")
                     .whereEqualTo("phone", phone)
@@ -233,7 +242,6 @@ public class SignUpActivity extends AppCompatActivity {
                     .addOnFailureListener(e -> {
                         Toast.makeText(SignUpActivity.this, "Error checking phone: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                     });
-
         }
     }
 
@@ -331,6 +339,7 @@ public class SignUpActivity extends AppCompatActivity {
         }
     }
 
+    // SignUpActivity.java
 
     private String hashDeviceId(String deviceId) {
         try {

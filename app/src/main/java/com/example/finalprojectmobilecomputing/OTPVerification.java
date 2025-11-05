@@ -28,6 +28,11 @@ import com.google.firebase.firestore.DocumentSnapshot;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+
+
 public class OTPVerification extends AppCompatActivity {
 
     private TextInputEditText otpEditText;
@@ -197,10 +202,12 @@ public class OTPVerification extends AppCompatActivity {
                                     android.provider.Settings.Secure.ANDROID_ID
                             );
 
+                            String hashedDeviceId = hashDeviceId(deviceId);
+
                             db.collection("users").document(userId)
                                     .update(
                                             "phoneVerified", true,
-                                            "deviceId", deviceId
+                                            "deviceId", hashedDeviceId
                                     )
                                     .addOnSuccessListener(aVoid -> Log.d("OTP", "User verified & device ID saved"))
                                     .addOnFailureListener(e -> Log.e("OTP", "Failed to update verification", e));
@@ -341,5 +348,22 @@ public class OTPVerification extends AppCompatActivity {
     protected void onDestroy() {
         if (resendTimer != null) resendTimer.cancel();
         super.onDestroy();
+    }
+
+    private String hashDeviceId(String deviceId) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(deviceId.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+            return deviceId; // fallback
+        }
     }
 }
