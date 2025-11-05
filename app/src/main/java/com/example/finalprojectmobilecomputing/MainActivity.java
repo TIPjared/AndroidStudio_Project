@@ -291,7 +291,7 @@ public class MainActivity extends AppCompatActivity {
 
                             Map<String, Object> newUser = new HashMap<>();
                             newUser.put("email", user.getEmail());
-                            newUser.put("phoneVerified", false);
+                            newUser.put("phoneVerified", true);
                             newUser.put("deviceId", hashedDeviceId);
                             newUser.put("phone", "");
                             newUser.put("name", "");

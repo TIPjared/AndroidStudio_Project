@@ -289,7 +289,7 @@ public class SignUpActivity extends AppCompatActivity {
                         newUser.put("email", email);
                         newUser.put("phone", "");
                         newUser.put("deviceId", hashedDeviceId);
-                        newUser.put("phoneVerified", false);
+                        newUser.put("phoneVerified", true);
                         newUser.put("emailVerified", true); // Google accounts are pre-verified
                         newUser.put("accountStatus", "ACTIVE");
                         newUser.put("isGoogleUser", true);
