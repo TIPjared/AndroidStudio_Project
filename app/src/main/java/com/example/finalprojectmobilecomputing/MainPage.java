@@ -227,6 +227,9 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main_page);
 
+        // 🔒 SECURITY CHECK: Verify user has completed OTP verification before allowing access
+        checkVerificationStatus();
+
         // --- Initialize services & views ---
         fusedLocationClient     = LocationServices.getFusedLocationProviderClient(this);
         geofencingClient        = LocationServices.getGeofencingClient(this);
@@ -483,6 +486,66 @@ public class MainPage extends AppCompatActivity implements OnMapReadyCallback {
         
         // --- Restore ride state will be called after map is ready ---
         // restoreRideState() is now called in onMapReady() to ensure map is ready first
+    }
+    
+    /**
+     * 🔒 SECURITY CHECK: Verify user has completed OTP verification before allowing access
+     * This prevents bypass if user navigates directly to MainPage without completing OTP
+     */
+    private void checkVerificationStatus() {
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (currentUser == null) {
+            // No user logged in - redirect to login
+            Toast.makeText(this, "Please login to continue", Toast.LENGTH_SHORT).show();
+            startActivity(new Intent(this, MainActivity.class));
+            finish();
+            return;
+        }
+
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
+        db.collection("users").document(currentUser.getUid())
+                .get()
+                .addOnSuccessListener(document -> {
+                    if (document.exists()) {
+                        Boolean phoneVerified = document.getBoolean("phoneVerified");
+                        Boolean emailVerified = document.getBoolean("emailVerified");
+                        
+                        // Check if both email and phone are verified
+                        if (emailVerified == null || !emailVerified) {
+                            // Email not verified - redirect to email verification
+                            Toast.makeText(this, "Please verify your email", Toast.LENGTH_SHORT).show();
+                            startActivity(new Intent(this, EmailVerificationActivity.class));
+                            finish();
+                            return;
+                        }
+                        
+                        if (phoneVerified == null || !phoneVerified) {
+                            // Phone not verified - logout and redirect to login
+                            FirebaseAuth.getInstance().signOut();
+                            Toast.makeText(this, "Please complete phone verification", Toast.LENGTH_SHORT).show();
+                            startActivity(new Intent(this, MainActivity.class));
+                            finish();
+                            return;
+                        }
+                        
+                        // Both verified - allow access (do nothing, continue with onCreate)
+                        Log.d("MainPage", "User verified, allowing access");
+                    } else {
+                        // User document not found - logout
+                        FirebaseAuth.getInstance().signOut();
+                        Toast.makeText(this, "User data not found", Toast.LENGTH_SHORT).show();
+                        startActivity(new Intent(this, MainActivity.class));
+                        finish();
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    // Error checking - logout for security
+                    Log.e("MainPage", "Error checking verification status", e);
+                    FirebaseAuth.getInstance().signOut();
+                    Toast.makeText(this, "Error verifying account status", Toast.LENGTH_SHORT).show();
+                    startActivity(new Intent(this, MainActivity.class));
+                    finish();
+                });
     }
     
     /**

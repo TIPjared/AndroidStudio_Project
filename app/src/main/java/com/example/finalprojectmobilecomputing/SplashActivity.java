@@ -5,6 +5,7 @@ import android.os.Handler;
 import android.view.View;
 import android.util.Log;
 import android.content.Intent;
+import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
@@ -69,16 +70,19 @@ public class SplashActivity extends AppCompatActivity {
                                     return;
                                 }
                                 
-                                // Check phone verification
+                                // Check phone verification - CRITICAL: User must verify phone before accessing app
                                 Boolean phoneVerified = doc.getBoolean("phoneVerified");
                                 
                                 if (Boolean.TRUE.equals(phoneVerified)) {
                                     Log.d(TAG, "User fully verified, going to MainPage");
                                     startActivity(new Intent(SplashActivity.this, MainPage.class));
                                 } else {
-                                    Log.d(TAG, "Phone not verified, redirecting to OTPVerification");
-                                    Intent intent = new Intent(SplashActivity.this, OTPVerification.class);
-                                    startActivity(intent);
+                                    // Phone not verified - logout and redirect to login
+                                    // This prevents bypass if user navigates away before completing OTP
+                                    Log.d(TAG, "Phone not verified, logging out and redirecting to login");
+                                    auth.signOut();
+                                    Toast.makeText(SplashActivity.this, "Please complete phone verification", Toast.LENGTH_SHORT).show();
+                                    startActivity(new Intent(SplashActivity.this, MainActivity.class));
                                 }
                             } else {
                                 Log.d(TAG, "User document not found, redirecting to login");

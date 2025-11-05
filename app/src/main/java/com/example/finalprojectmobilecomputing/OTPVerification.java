@@ -73,8 +73,11 @@ public class OTPVerification extends AppCompatActivity {
         resendOtpButton = findViewById(R.id.resendOtpButton);
         backButton = findViewById(R.id.backButton);
 
-        // 🔙 Back button → login
+        // 🔙 Back button → logout and go to login
         backButton.setOnClickListener(v -> {
+            // Logout user if they press back (OTP not verified)
+            FirebaseAuth.getInstance().signOut();
+            Toast.makeText(this, "Please complete OTP verification to continue", Toast.LENGTH_SHORT).show();
             startActivity(new Intent(OTPVerification.this, MainActivity.class));
             finish();
         });
@@ -342,6 +345,18 @@ public class OTPVerification extends AppCompatActivity {
         } catch (JSONException e) {
             Toast.makeText(this, "Error preparing request", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    /**
+     * Override system back button to logout user if they try to bypass OTP
+     */
+    @Override
+    public void onBackPressed() {
+        // Logout user if they press system back button (prevents bypass)
+        FirebaseAuth.getInstance().signOut();
+        Toast.makeText(this, "Please complete OTP verification to continue", Toast.LENGTH_SHORT).show();
+        startActivity(new Intent(this, MainActivity.class));
+        finish();
     }
 
     @Override
