@@ -165,9 +165,9 @@ public class QRScannerActivity extends AppCompatActivity {
                             }
                         }
 
-                        // 🔒 Block if rented by someone else
-                        if ("locked".equals(status) && rentedBy != null && !rentedBy.equals(currentUserId)) {
-                            Toast.makeText(this, "Bike is already rented by another user!", Toast.LENGTH_LONG).show();
+                        // 🔒 Block if rented by someone else OR offline
+                        if ("locked".equals(status) && rentedBy != null && !rentedBy.equals(currentUserId) || "offline".equals(status)) {
+                            Toast.makeText(this, "Bike is unavailable", Toast.LENGTH_LONG).show();
                             isScanned = false;
                             return;
                         }
