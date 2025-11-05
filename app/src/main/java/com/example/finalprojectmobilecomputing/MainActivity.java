@@ -329,6 +329,7 @@ public class MainActivity extends AppCompatActivity {
         return "+63" + digits;
     }
 
+    // ✅ MODIFIED — Navigates immediately without waiting for the server response
     private void sendOtpRequest(String phoneNumber, String userId) {
         if (phoneNumber == null || phoneNumber.isEmpty()) {
             Toast.makeText(this, "No phone number found for user", Toast.LENGTH_SHORT).show();
@@ -337,6 +338,7 @@ public class MainActivity extends AppCompatActivity {
 
         String normalizedPhone = normalizePhone(phoneNumber);
 
+        // --- PREPARE AND SEND THE REQUEST TO THE SERVER ---
         try {
             JSONObject jsonBody = new JSONObject();
             jsonBody.put("phone", normalizedPhone);
@@ -344,42 +346,34 @@ public class MainActivity extends AppCompatActivity {
             RequestQueue queue = Volley.newRequestQueue(this);
             JsonObjectRequest request = new JsonObjectRequest(
                     Request.Method.POST,
-                    SERVER_URL,
+                    SERVER_URL, // Your server URL
                     jsonBody,
-                    new Response.Listener<JSONObject>() {
-                        @Override
-                        public void onResponse(JSONObject response) {
-                            try {
-                                boolean success = response.getBoolean("success");
-                                if (success) {
-                                    Toast.makeText(MainActivity.this, "OTP sent to " + normalizedPhone, Toast.LENGTH_SHORT).show();
-
-                                    Intent intent = new Intent(MainActivity.this, OTPVerification.class);
-                                    intent.putExtra("fromLogin", true);
-                                    startActivity(intent);
-                                    finish();
-
-                                } else {
-                                    String message = response.optString("message", "Failed to send OTP");
-                                    Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
-                                }
-                            } catch (JSONException e) {
-                                Toast.makeText(MainActivity.this, "Invalid server response", Toast.LENGTH_SHORT).show();
-                            }
-                        }
+                    response -> {
+                        // Success: The server responded quickly. Log it.
+                        Log.d("sendOtpRequest", "Server responded successfully in time.");
                     },
-                    new Response.ErrorListener() {
-                        @Override
-                        public void onErrorResponse(VolleyError error) {
-                            Toast.makeText(MainActivity.this, "Failed to send OTP: " + error.getMessage(), Toast.LENGTH_SHORT).show();
-                        }
+                    error -> {
+                        // Error: The server took too long or failed. Log it.
+                        // The user is already on the OTP screen, so they are not stuck.
+                        Log.w("sendOtpRequest", "Server did not respond in time (timeout). User is on OTP screen.", error);
                     }
             );
-
             queue.add(request);
         } catch (JSONException e) {
-            Toast.makeText(this, "Error creating request", Toast.LENGTH_SHORT).show();
+            Log.e("sendOtpRequest", "Error creating OTP request body", e);
         }
+
+        // --- NAVIGATE IMMEDIATELY ---
+        // We no longer wait for the server. We send the user to the OTP screen right away,
+        // trusting the OTP will arrive shortly.
+        Toast.makeText(MainActivity.this, "Sending OTP to " + normalizedPhone, Toast.LENGTH_SHORT).show();
+
+        Intent intent = new Intent(MainActivity.this, OTPVerification.class);
+        // Pass the user ID and phone number, which OTPVerification will need to verify the code.
+        intent.putExtra("USER_PHONE", normalizedPhone);
+        intent.putExtra("USER_ID", userId);
+        startActivity(intent);
+        // Do NOT finish MainActivity, so the user can go back if they entered the wrong credentials.
     }
 
     private void signInWithGoogle() {
