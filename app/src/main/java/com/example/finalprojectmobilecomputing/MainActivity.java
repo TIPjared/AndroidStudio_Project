@@ -45,6 +45,11 @@ import org.json.JSONObject;
 import java.util.HashMap;
 import java.util.Map;
 
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+
 public class MainActivity extends AppCompatActivity {
 
     private FirebaseAuth mAuth;
@@ -56,9 +61,8 @@ public class MainActivity extends AppCompatActivity {
     private GoogleSignInClient mGoogleSignInClient;
     private View googleSignInButton;
 
-    private static final String SERVER_URL = "https://philsms-otp-server.onrender.com/send-otp";
-
-    private static final String SERVER_PING_URL = "https://philsms-otp-server.onrender.com/";
+    private String SERVER_URL;
+    private String SERVER_PING_URL;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -73,6 +77,10 @@ public class MainActivity extends AppCompatActivity {
         });
 
         pingServer();
+
+        String baseUrl = getString(R.string.otp_server_url);
+        SERVER_URL = baseUrl + "/send-otp";
+        SERVER_PING_URL = baseUrl + "/";
 
         startLoginAnimations();
 
@@ -205,13 +213,13 @@ public class MainActivity extends AppCompatActivity {
                         if (accountStatus == null) {
                             accountStatus = "ACTIVE";
                         }
-                        
+
                         if ("SUSPENDED".equals(accountStatus) || "BANNED".equals(accountStatus)) {
                             // Show account status dialog
                             showAccountStatusDialog(accountStatus);
                             return;
                         }
-                        
+
                         // Check email verification
                         Boolean emailVerified = document.getBoolean("emailVerified");
                         if (emailVerified == null || !emailVerified) {
@@ -223,21 +231,35 @@ public class MainActivity extends AppCompatActivity {
                         }
 
                         Boolean isGoogleUser = document.getBoolean("isGoogleUser");
+                        String savedDeviceId = document.getString("deviceId");
+
+                        String currentDeviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
+                        String hashedDeviceId = hashDeviceId(currentDeviceId);
+
                         if (isGoogleUser != null && isGoogleUser) {
-                            // Google user → skip OTP completely
-                            startActivity(new Intent(MainActivity.this, MainPage.class));
-                            finish();
-                            return;
+                            if (savedDeviceId != null && savedDeviceId.equals(hashedDeviceId)) {
+                                // ✅ Trusted device
+                                startActivity(new Intent(MainActivity.this, MainPage.class));
+                                finish();
+                                return;
+                            } else {
+                                // ⚠️ New or unknown device
+                                Toast.makeText(MainActivity.this,
+                                        "New device detected for Google account. Please confirm your identity.",
+                                        Toast.LENGTH_SHORT).show();
+
+                                // Optional: future verification logic can go here
+                                startActivity(new Intent(MainActivity.this, MainPage.class));
+                                finish();
+                                return;
+                            }
                         }
 
                         Boolean phoneVerified = document.getBoolean("phoneVerified");
-                        String savedDeviceId = document.getString("deviceId");
                         String phoneNumber = document.contains("phone") ? document.getString("phone") : "";
 
-                        String currentDeviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
-
                         if (phoneVerified != null && phoneVerified) {
-                            if (savedDeviceId != null && savedDeviceId.equals(currentDeviceId)) {
+                            if (savedDeviceId != null && savedDeviceId.equals(hashedDeviceId)) {
                                 // Already verified on this device → go to MainPage
                                 startActivity(new Intent(MainActivity.this, MainPage.class));
                                 finish();
@@ -263,23 +285,33 @@ public class MainActivity extends AppCompatActivity {
                     } else {
                         FirebaseUser user = mAuth.getCurrentUser();
                         if (user != null) {
+
+                            String deviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
+                            String hashedDeviceId = hashDeviceId(deviceId);
+
                             Map<String, Object> newUser = new HashMap<>();
                             newUser.put("email", user.getEmail());
                             newUser.put("phoneVerified", false);
-                            newUser.put("deviceId", null);
-                            newUser.put("phone", user.getPhoneNumber() != null ? user.getPhoneNumber() : "");
+                            newUser.put("deviceId", hashedDeviceId);
+                            newUser.put("phone", "");
                             newUser.put("name", "");
                             newUser.put("birthdate", "");
                             newUser.put("gender", "");
                             newUser.put("profileImageUrl", "");
                             newUser.put("emailVerified", true);
                             newUser.put("accountStatus", "ACTIVE");
+                            newUser.put("isGoogleUser", true);
                             newUser.put("createdAt", System.currentTimeMillis());
-                            db.collection("users").document(userId).set(newUser);
 
-                            if (user.getPhoneNumber() != null && !user.getPhoneNumber().isEmpty()) {
-                                sendOtpRequest(user.getPhoneNumber(), userId);
-                            }
+                            db.collection("users").document(userId)
+                                    .set(newUser)
+                                    .addOnSuccessListener(aVoid -> {
+                                        startActivity(new Intent(MainActivity.this, MainPage.class));
+                                        finish();
+                                    })
+                                    .addOnFailureListener(e ->
+                                            Toast.makeText(MainActivity.this, "Failed to create Google user: " + e.getMessage(), Toast.LENGTH_SHORT).show()
+                                    );
                         }
                     }
                 })
@@ -414,6 +446,23 @@ public class MainActivity extends AppCompatActivity {
                 error -> Log.w("ServerPing", "Server still waking up... (Render cold start)")
         );
         queue.add(pingRequest);
+    }
+
+    private String hashDeviceId(String deviceId) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(deviceId.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+            return deviceId; // fallback
+        }
     }
 
 }

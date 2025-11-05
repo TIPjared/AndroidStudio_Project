@@ -51,13 +51,17 @@ public class OTPVerification extends AppCompatActivity {
     private static final int DAILY_OTP_LIMIT = 10;
 
     // 🔧 Replace this with your Render server later
-    private static final String VERIFY_URL = "https://philsms-otp-server.onrender.com/verify-otp";
-    private static final String RESEND_URL = "https://philsms-otp-server.onrender.com/send-otp";
+    private String VERIFY_URL;
+    private String RESEND_URL;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_otpverification);
+
+        String baseUrl = getString(R.string.otp_server_url);
+        VERIFY_URL = baseUrl + "/verify-otp";
+        RESEND_URL = baseUrl + "/send-otp";
 
         otpEditText = findViewById(R.id.otpEditText);
         verifyOtpButton = findViewById(R.id.verifyOtpButton);

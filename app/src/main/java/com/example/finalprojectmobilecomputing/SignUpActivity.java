@@ -28,8 +28,12 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.firebase.firestore.FirebaseFirestore;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.Map;
+
 
 public class SignUpActivity extends AppCompatActivity {
 
@@ -174,6 +178,7 @@ public class SignUpActivity extends AppCompatActivity {
         // Convert to international format for Firebase
         final String phone = "+63" + phoneInput.substring(1);
 
+
         if (!password.equals(confirmPassword)) {
             Toast.makeText(SignUpActivity.this, "Passwords do not match", Toast.LENGTH_SHORT).show();
         } else if (!isStrongPassword(password)) {
@@ -193,13 +198,13 @@ public class SignUpActivity extends AppCompatActivity {
                                         if (task.isSuccessful()) {
                                             String userId = mAuth.getCurrentUser().getUid();
 
-                                            String deviceId = Settings.Secure.getString(
-                                                    getContentResolver(), Settings.Secure.ANDROID_ID);
+                                            String deviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
+                                            String hashedDeviceId = hashDeviceId(deviceId);
 
                                             Map<String, Object> newUser = new HashMap<>();
                                             newUser.put("email", email);
                                             newUser.put("phone", phone);
-                                            newUser.put("deviceId", null);
+                                            newUser.put("deviceId", hashedDeviceId);
                                             newUser.put("phoneVerified", false);
                                             newUser.put("emailVerified", false);
                                             newUser.put("accountStatus", "ACTIVE");
@@ -267,13 +272,15 @@ public class SignUpActivity extends AppCompatActivity {
                         // Save basic user info to Firestore
                         String userId = mAuth.getCurrentUser().getUid();
                         String email = mAuth.getCurrentUser().getEmail();
+                        String deviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
+                        String hashedDeviceId = hashDeviceId(deviceId);
 
                         // Create a user entry in Firestore (without phone initially)
                         FirebaseFirestore db = FirebaseFirestore.getInstance();
                         Map<String, Object> newUser = new HashMap<>();
                         newUser.put("email", email);
                         newUser.put("phone", "");
-                        newUser.put("deviceId", null);
+                        newUser.put("deviceId", hashedDeviceId);
                         newUser.put("phoneVerified", false);
                         newUser.put("emailVerified", true); // Google accounts are pre-verified
                         newUser.put("accountStatus", "ACTIVE");
@@ -323,4 +330,23 @@ public class SignUpActivity extends AppCompatActivity {
                     });
         }
     }
+
+
+    private String hashDeviceId(String deviceId) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(deviceId.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+            return deviceId; // fallback if hashing fails
+        }
+    }
+
 }
