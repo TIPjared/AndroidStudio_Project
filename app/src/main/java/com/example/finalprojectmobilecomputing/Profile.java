@@ -172,9 +172,13 @@ public class Profile extends AppCompatActivity {
             profileEmail.setText(email);
         }
 
+        // Extract username from email as fallback
+        String emailUsername = MainPage.getUsernameFromEmail(currentUser != null ? currentUser.getEmail() : null);
+        
         // Load cached data first for instant display
         if (MainPage.dataLoaded) {
-            profileName.setText(MainPage.cachedUsername.isEmpty() ? "User Name" : MainPage.cachedUsername);
+            String displayName = MainPage.cachedUsername.isEmpty() ? emailUsername : MainPage.cachedUsername;
+            profileName.setText(displayName);
             profilePhone.setText(MainPage.cachedPhone.isEmpty() ? "Phone not set" : MainPage.cachedPhone);
             
             if (!MainPage.cachedProfileImageUrl.isEmpty()) {
@@ -198,10 +202,9 @@ public class Profile extends AppCompatActivity {
                 MainPage.cachedProfileImageUrl = profileImageUrl != null ? profileImageUrl : "";
                 MainPage.dataLoaded = true;
 
-                // Update UI with fresh data
-                if (name != null && !name.isEmpty()) {
-                    profileName.setText(name);
-                }
+                // Update UI with fresh data - use Firestore name if available, otherwise email username
+                String displayName = (name != null && !name.isEmpty()) ? name : emailUsername;
+                profileName.setText(displayName);
                 
                 if (phone != null && !phone.isEmpty()) {
                     profilePhone.setText(phone);

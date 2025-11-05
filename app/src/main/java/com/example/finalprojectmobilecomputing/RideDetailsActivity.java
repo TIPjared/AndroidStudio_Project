@@ -52,6 +52,9 @@ public class RideDetailsActivity extends AppCompatActivity {
     private void loadUserData() {
         FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
         if (currentUser != null) {
+            // Extract username from email as fallback
+            String emailUsername = MainPage.getUsernameFromEmail(currentUser.getEmail());
+            
             FirebaseFirestore.getInstance()
                 .collection("users")
                 .document(currentUser.getUid())
@@ -59,10 +62,17 @@ public class RideDetailsActivity extends AppCompatActivity {
                 .addOnSuccessListener(documentSnapshot -> {
                     if (documentSnapshot.exists()) {
                         String name = documentSnapshot.getString("name");
-                        if (name != null && !name.isEmpty()) {
-                            greetingText.setText("Hi, " + name);
-                        }
+                        // Use Firestore name if available, otherwise email username
+                        String displayName = (name != null && !name.isEmpty()) ? name : emailUsername;
+                        greetingText.setText("Hi, " + displayName);
+                    } else {
+                        // Use email username if Firestore document doesn't exist
+                        greetingText.setText("Hi, " + emailUsername);
                     }
+                })
+                .addOnFailureListener(e -> {
+                    // Use email username on error
+                    greetingText.setText("Hi, " + emailUsername);
                 });
         }
     }
